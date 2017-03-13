@@ -1,7 +1,7 @@
-<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html>
 <head>
+<meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Finding Dark POIs</title>
 </head>
@@ -20,6 +20,7 @@
 <a href="#the_real_work">The Real Work</a><br/>
 <a href="#caveats">Caveats</a><br/>
 <a href="#the_shortcut">The Shortcut</a><br/>
+<a href="#feedback">Feedback</a><br/>
 
 <p>The mapper who has mapped <a href="https://www.openstreetmap.org/node/4379801321">this node</a> may wonder
 why it never has appeared on the map:</p>
@@ -242,7 +243,7 @@ rel({{bbox}})
 out geom({{bbox}});
 </pre>
 
-<p>And <a href="http://overpass-turbo.eu/s/ng3">this</a> is one possibility for relations.
+<p>And <a href="https://overpass-turbo.eu/s/ng3">this</a> is one possibility for relations.
 Currently all classes of relations should have tags.
 Thus we do not need to exclude any relations because they are members of other relations.</p>
 
@@ -289,7 +290,7 @@ That is by far worse.</li>
 
 <p>Version 0.7.54 offers a faster approach to query for objects with insufficient tagging.
 You can use the number of tags as filter criterion.
-<a href="http://overpass-turbo.eu/s/ngj">Get all nodes</a> which have a <em>name</em> tag but no other tag:</p>
+<a href="https://overpass-turbo.eu/s/ngj">Get all nodes</a> which have a <em>name</em> tag but no other tag:</p>
 
 <pre style="background-color:yellow;">
 node({{bbox}})
@@ -310,11 +311,11 @@ This may or may not be improved in the next version.</li>
 </ul>
 
 <p>Of course this works also with ways.
-More interesting is to search <a href="http://overpass-turbo.eu/s/ngE">for ways with no tags at all</a>.
+More interesting is to search <a href="https://overpass-turbo.eu/s/ngE">for ways with no tags at all</a>.
 To get a relevant result set, we must exclude ways that are part of relations:</p>
 
 <pre style="background-color:yellow;">
-rel({{bbox}})->.foo;
+rel({{bbox}})-&gt;.foo;
 ( way({{bbox}})
     (if:count_tags()==0);
  - way({{bbox}})(r.foo); );
@@ -327,6 +328,19 @@ it is a good balancy to make efficient use of time for data gardening.
 It is straightforward to apply this to other tags that do not classify objects (like <em>area=yes</em>).
 How the long way helps to figure out whether your data model fits to the actual OpenStreetMap data
 will be subject of a subsequent blog post.</p>
+
+<h2 id="feedback">Feedback</h2>
+
+<p>As nebulon42 <a href="https://lists.openstreetmap.org/pipermail/talk/2017-March/077648.html">has suggested</a>,
+you can <a href="https://overpass-turbo.eu/s/ntc">search for a lot of old-style multipolygons</a> this way:</p>
+<pre style="background-color:yellow;">
+relation({{bbox}})
+  [type=multipolygon]
+  (if:count_tags()==1);
+(._;&gt;;);
+out;
+</pre>
+<p>Thanks a lot.</p>
 
 </body>
 </html>

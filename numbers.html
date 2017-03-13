@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Working with Numbers</title>
+</head>
+<body style="font-family:sans-serif; width:30em; position:absolute; left:50%; margin-left:-15em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Working with Numbers</h1>
+
+<p>Published: 2017-03-13</p>
+
+<h3>Table of content</h3>
+
+<a href="#power">A Powerful Example</a><br/>
+<a href="#maxspeed">Maximum Speed</a><br/>
+<a href="#nonnumbers">What has gone wrong?</a><br/>
+<a href="#peaks">Maximum Peak</a><br/>
+<a href="#discussion">Your Move</a><br/>
+
+<p>First of all, I would like to acknowledge nebulon42 for <a href="https://lists.openstreetmap.org/pipermail/talk/2017-March/077648.html">giving feedback</a>.
+I have added the example to <a href="dark_pois.html">last week's blog</a>.</p>
+
+<h2 id="power">A Powerful Example</h2>
+
+<p>We would like to make a map of the long distance power transmission lines,
+like the following one:</p>
+
+<figure>
+<img src="power_netherlands.png" style="width:20em;"/>
+<figcaption>Long distance power transmission lines in the Netherlands</figcaption>
+</figure>
+
+<p>We can <a href="https://overpass-turbo.eu/s/nrK">collect with a regular expression query</a> all lines with more than 100 kV:</p>
+<pre style="background-color:yellow;">
+area[name="Nederland"];
+way(area)[power=line][voltage~"^[1-9].....$"];
+out geom;
+</pre>
+<p>But this is hard to read for all those that do not work all day with regular expressions.
+In addition, this would not match hypothetical transmission lines of 1000 kV or more.
+We would rather like to use the familar greater-equal operator:</p>
+<pre style="background-color:yellow;">
+area[name="Nederland"];
+way(area)[power=line](if:t[voltage]&gt;=100000);
+out geom;
+</pre>
+<p><a href="https://overpass-turbo.eu/s/nrL">This query</a> basically works.
+However, we get now more results than before.
+What is going on here?
+What is going wrong?
+To enable you to figure our yourself is the purpose of this blog post.</p>
+
+<h2 id="maxspeed">Maximum Speed</h2>
+
+<p>We start to <a href="https://overpass-turbo.eu/s/nrR">have a look</a> at the <em>maxspeed</em> tag on motorways around Cologne:</p>
+<pre style="background-color:yellow;">
+way({{bbox}})[highway=motorway]
+  [maxspeed](if:t[maxspeed]&gt;120);
+out geom;
+</pre>
+<p>Let us walk through the syntax:</p>
+<ul>
+<li><em>way</em>: We search for all ways</li>
+<li><em>({{bbox}})</em>: within the bounding box filled-in by Overpass Turbo</li>
+<li><em>[highway=motorway]</em>: that have a tag with key <em>highway</em> and value <em>motorway</em></li>
+<li><em>[maxspeed]</em>: and have a tag with key <em>maxspeed</em> and arbitrary value</li>
+</ul>
+<p>The new part is <em>(if:t[maxspeed]&gt;120)</em>.
+Again <em>(if:...)</em>is the shell to select exactly those elements for which the condition is true.
+The expression <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Tag_value_and_generic_value_operators">t[maxspeed]</a></em> evaluates for each element to the value of its maxspeed tag.
+It would evaluate to the empty string for elements without maxspeed tag
+but we have already narrowed down to those with maxspeed tag.
+<em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Less.2C_less-equal.2C_greater.2C_and_greater-equal">&gt;</a></em> compares the expressions on both sides.
+Finally <em>120</em> evaluates always to the number 120.
+All in all, we ask for all ways
+that have as <em>maxspeed</em> tag value a value greater than 120.</p>
+
+<p>More than expected of the roads seem to allow for high speed.
+But <a href="https://overpass-turbo.eu/s/nrO">a simple cross-check</a> should make you suspicious:</p>
+<pre style="background-color:yellow;">
+way({{bbox}})[highway=motorway]
+  [maxspeed](if:t[maxspeed]&gt;200);
+out geom;
+</pre>
+
+<p>Apparently, there is something going wrong here.
+This is why there are <a href="https://overpass-turbo.eu/s/nrP">some extra tools</a> to avoid these things:</p>
+<pre style="background-color:yellow;">
+way({{bbox}})[highway=motorway]
+  [maxspeed](if:!is_number(t[maxspeed]));
+out geom;
+</pre>
+<p>Compare to the previous query!
+The new part is <em>!is_number(...)</em>.
+The expression <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Number_check_and_normalizer">is_number(...)</a></em> evaluates the value it gets to whether it is a number.
+The shrek is <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Boolean_Negation">logical negation</a>.
+All in all we ask here for all ways
+that have as <em>maxspeed</em> tag value a value that is not a number.</p>
+
+<h2 id="nonnumbers">What has gone wrong?</h2>
+
+<p>We get quite a large result, but not necessary a clue which values exist.
+To solve this <a href="https://overpass-turbo.eu/s/nrQ">we can employ</a> another new tool:</p>
+<pre style="background-color:yellow;">
+way({{bbox}})[highway=motorway]
+  [maxspeed](if:!is_number(t[maxspeed]));
+make taginfo_of_cologne values=set(t[maxspeed]);
+out;
+</pre>
+<p>The new thing here is the third line.
+It consists of three parts:</p>
+<ul>
+<li><em>make</em>: The command we use.
+Two two commands <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_make_statement">make</a></em> and <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_convert_statement">convert</a></em> will be in all details subject to a later blogpost.</li>
+<li><em>taginfo_of_cologne</em>: an arbitrary identifier.
+This becomes the name of the element in the result.</li>
+<li><em>values=set(t[maxspeed])</em>: The part that defines what tags that element gets.
+In particular, <em>values=...</em> instructs the make statement to set the tag with key <em>values</em> to the value that is the result of the right hand side expression.</li>
+</ul>
+<p>The expression <em>set(t[maxspeed])</em> does the real job:
+<em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_and_set">set(...)</a></em> is a so-called <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Aggregators">aggregator</a>.
+The job of an aggregator is to evaluate its argument once for each element in the previous result
+and then to produce a single string that somehow combines all the results.
+The particular behaviour of <em>set</em> is to append all found values in alphabetically order separated by semi-colons.</p>
+
+<p>Altogether, we go over all the found ways,
+look at their <em>maxspeed</em> tag
+and tack all found values together with semi-colons.
+The result goes in a specified tag of a dedicated element.
+This should result in:</p>
+<pre style="background-color:yellow;">
+  &lt;taginfo_of_cologne id=&quot;1&quot;&gt;
+    &lt;tag k=&quot;values&quot; v=&quot;none;signals&quot;/&gt;
+  &lt;/taginfo_of_cologne&gt;
+</pre>
+
+<p>Why have these values interfered with the <em>&gt;200</em> query?
+At the moment, the greater-than comparsion tries to be smart:
+If it has a number on both sides then it compares both sides as a number.
+If one or both sides are strings that cannot be interpreted as number
+then these strings are compared lexicographically.
+And both <em>none</em> and <em>signals</em> are in order after <em>200</em>,
+thus they pass the filter.</p>
+
+<p>If this behavious makes sense depends on whether there are use cases for string comparison.
+If you know of any such use cases then please send them.
+Otherwise we may have the latitude to change that behaviour such that the naive approach works.
+The hard part is to get the behaviour both intuitive and logically consistent, not the implementation.
+And if a thing is intuive depends on the use cases.</p>
+
+<h2 id="peaks">Maximum Peak</h2>
+
+<p>Another application of numbers in tags is the elevation tag <em>ele</em>.
+We would like to find the highest peak in a given region.
+A region with quite high peaks in Germany is Baden-Württemberg.</p>
+
+<p>With the approach from the previous section we only can find quite high peaks:</p>
+<pre>
+area[name="Baden-Württemberg"];
+node(area)[natural=peak](if:t[ele]>1000);
+out geom;
+</pre>
+<p>In the result we have <a href="https://www.openstreetmap.org/node/783669174">the Sickersberg</a>,
+although it is only 978 meters high.
+What has gone wrong?</p>
+
+<p>The tag value <em>978 m</em> is not a number because it contains the explicit unit <em>m</em>.
+As a string, <em>978 m</em> is lexicographically after <em>1000</em>.
+Thus, the engine has included this node in the result.
+We should <a href="https://overpass-turbo.eu/s/nsR">take this into account</a>:</p>
+<pre>
+area[name="Baden-Württemberg"];
+node(area)[natural=peak](if:number(t[ele])>1000);
+out geom;
+</pre>
+
+<p>After fixing the issue of not-numbers,
+we still want not all quite high but only the highest peak:</p>
+<pre>
+area[name="Baden-Württemberg"];
+node(area)[natural=peak](if:number(t[ele])>1000);
+node._(if:t[ele]==max(t[ele]));
+out;
+</pre>
+<p>We <a href="https://overpass-turbo.eu/s/nsV">achieve this</a> with a standard trick from mathematics.
+Let us walk through the query:</p>
+<ul>
+<li><em>area[name="Baden-Württemberg"]</em>: Selects all areas (actually only one) with name <em>Baden-Württemberg</em>.</li>
+<li><em>node(area)[natural=peak](if:number(t[ele])>1000)</em>:
+Selects all nodes within the given area (filter <em>(area)</em>)
+that have a tag with key <em>natural</em> and value <em>peak</em>
+and have a tag with key <em>ele</em> that evaluates to a number bigger than <em>1000</em>.</li>
+<li><em>node._(if:t[ele]==max(t[ele]))</em>:
+This is our mathematical trick.
+The elements with the biggest values (precise: with the maximum big values) are all those elements whois value is equal to the maximum of all values.
+This is written in three details:
+  <ul>
+  <li><em>._</em>: This filter means we take only the result from the last step as input.</li>
+  <li><em>(if:t[ele]==...)</em>: We only want elements for which the tag wiith key <em>ele</em> has a value equal to the right hand size expression.</li>
+  <li><em>max(t[ele])</em>: This is again an <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Aggregators">aggregator</a>.
+  The aggregator <em>max(...)</em> evaluates its argument for each element of the input set
+  and returns the maximum of all found values.</li>
+  </ul>
+</li>
+<li><em>out</em>: Send the results back to the client, i.e. to us.</li>
+</ul>
+
+<p>Finally, <a href="https://overpass-turbo.eu/s/nrN">what values are the problem?</a></p>
+<pre style="background-color:yellow;">
+area[name="Baden-Württemberg"];
+node(area)[natural=peak](if:is_tag(ele) &amp;&amp; !is_number(t[ele]));
+out geom;
+</pre>
+<p>Reduced to the essential:</p>
+<pre style="background-color:yellow;">
+area[name="Baden-Württemberg"];
+node(area)[natural=peak](if:is_tag(ele) &amp;&amp; !is_number(t[ele]));
+make debug values=set(t[ele]);
+out;
+</pre>
+
+<h2 id="discussion">Your Move</h2>
+
+<p>Walking through the list of the last query we see that there are two kinds of values we need to care for:</p>
+<ul>
+<li>Values with explicit unit: <em>1005 m</em></li>
+<li>Values with comma as decimal separator: <em>1011,7</em></li>
+</ul>
+<p>We proceed with another example to collect more problem classes.</p>
+
+<p>Let us revisit the query from the beginning:</p>
+<pre style="background-color:yellow;">
+area[name="Nederland"];
+way(area)[power=line](if:t[voltage]&gt;=100000);
+out geom;
+</pre>
+<p>We now know that the problem are the non-numeric values.
+And <a href="https://overpass-turbo.eu/s/ntd">we can fix</a> that:</p>
+<pre style="background-color:yellow;">
+area[name="Nederland"];
+way(area)[power=line](if:number(t[voltage])&gt;=100000);
+out geom;
+</pre>
+<p>But we are now interested in the non-numeric values:</p>
+<pre style="background-color:yellow;">
+area[name="Nederland"];
+way(area)[power=line](if:is_tag(voltage) &amp;&amp; !is_number(t[voltage]));
+make debug values=set(t[voltage]);
+out geom;
+</pre>
+<p>The list looks odd:
+<em>380000</em> appears multiple times, and <em>0</em> is somewhere in between, as opposed to any imaginable order.
+The reason are ways like <a href="https://www.openstreetmap.org/way/87345533">this</a> with a tag value <em>380000;110000</em>.</p>
+
+<p>We <a href="https://overpass-turbo.eu/s/nte">can overcome</a> that problem:</p>
+<pre style="background-color:yellow;">
+area[name="Nederland"];
+way(area)[power=line](if:is_tag(voltage) &amp;&amp; !is_number(t[voltage]));
+make debug values=set("{" + t[voltage] + "}");
+out geom;
+</pre>
+<p>This puts curly brackets around each value and makes values with semi-colons distinguishable.</p>
+
+<p>Ways with semi-colons are the third class of values we need to keep in mind.
+And do not forget special values like <em>none</em> and <em>signals</em>.</p>
+
+<P>I have two questions I would like to survey for:
+How shall we treat these four kinds of special values in Overpass API?
+Treating everything that has digits as a number does not solve the problem,
+because it would paint over e.g. semi-colon values instead of pointing at the problem.</p>
+
+<p>The second question is:
+What to make out of the less and greater operators?
+I will open next weeks blog post with a short history of comparison functions in programming languages.
+None of the concepts is without downsides.
+Which one is best depends on use cases.
+In particular:
+if you want to retain comparison for strings then please tell me use cases.</p>
+
+</body>
+</html>

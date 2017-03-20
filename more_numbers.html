@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>More about Numbers</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>More about Numbers</h1>
+
+<p>Published: 2017-03-20</p>
+
+<h3>Table of content</h3>
+
+<a href="#levels">Levels</a><br/>
+<a href="#relative_values">Relative Values</a><br/>
+<a href="#comparing_tags">Comparing Tags</a><br/>
+<a href="#semicolon">Lists in Tags</a><br/>
+
+<h2 id="levels">Levels</h2>
+
+<p>Levels are already a well-established paradigm in OpenStreetMap.
+This can be seen in maps like <a href="https://openlevelup.net">OpenLevelUp</a> and <a href="http://openstationmap.org">OpenStationMap</a>.</p>
+
+<p>Nonetheless, our tools are geared towards a 2D-representation of the world.
+For a reason:
+for by far most of the world only the surface is interesting.</p>
+
+<p>This has a downside where in reality locations are packed on multiple stories:
+We have piles of data there that are difficult to edit or even view.</p>
+
+<figure>
+<img src="data_mess.jpg" style="width:20em;"/>
+<figcaption>Piles of data in the railway station <a href="https://www.openstreetmap.org/#map=19/48.84481/2.37314">Gare de Lyon</a></figcaption>
+</figure>
+
+<p>It is possible to get level-by-level through the data.
+In a first step, we can look <a href="https://overpass-turbo.eu/s/nxA">which levels exist</a>:</p>
+<pre>
+( node({{bbox}})[level];
+  way({{bbox}})[level];
+  rel({{bbox}})[level]; );
+make levels_here level_list=set("{" + t[level] + "}");
+out;
+</pre>
+<p>This works similar to <a href="numbers.html#discussion">the power line example</a> for a list of all values.</p>
+
+<p>We can then easily fetch the data level-by-level:</p>
+<pre>
+( node({{bbox}})[level={{value}}];
+  way({{bbox}})[level={{value}}];
+  rel({{bbox}})[level={{value}}]; );
+(._; &gt;;);
+out;
+</pre>
+<p>Please replace the <em>{{value}}</em> with the actual level.
+Let us briefly walk through the query:
+The first three lines employ two rather well-known features:</p>
+<ul>
+<li>The queries <em>node({{bbox}})[level={{value}}]</em> resp. with <em>way</em> or <em>rel</em> select all elements
+within the supplied bounding box and with a tag <em>level</em>.</li>
+<li>They are wrapped in an <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union">union</a> statement, written as a pair of parentheses.
+This statement produces as result all objects that are in one or more results of the statements inside.</li>
+<li>In the fourth line, there are two statements wrapped again in an union statement.
+The first one is more or less auxiliary:
+<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Item"><em>._</em></a> reproduces the last result.
+This assures that a copy of the previous result is in the union result.
+The second one consists of one character, <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Recurse_down_.28.3E.29"><em>&gt;</em></a>.
+It returns all node members of ways in the previous result, all node and way members of relations in the previous result,
+and all nodes that are members of the just added ways.
+Altogether it ensures that we have resolved all dependencies necessary to get the geometries of the previous result.</li>
+</ul>
+
+<h2 id="relative_values">Relative Values</h2>
+
+<p>But what if we have an element and would like to get only those elements on the same level?
+In our example: you would like to know everything about the "RER D" part of the station.</p>
+
+<p>To prepare the answer,
+I would like to use <a href="https://overpass-turbo.eu/s/nxy">a slightly fancier variant</a> of the last query:</p>
+<pre>
+make level_param val={{value}} -&gt;.param;
+( node({{bbox}})[level](if:t[level]==param.set(t[val]));
+  way({{bbox}})[level](if:t[level]==param.set(t[val]));
+  rel({{bbox}})[level](if:t[level]==param.set(t[val])); );
+(._; &gt;;);
+out;
+</pre>
+<p>The value now needs to be set only once.
+We have a short look at the details.
+The first line is a <em>make</em> statement.
+The only uncommon thing is that it ends in <em>-&gt;.param</em>.
+This stores the result instead of the standard place to a new place <em>param</em>.</p>
+
+<p>In the second to fourth line this result is taken as input to the aggregator <em>set</em>,
+hence written as <em>param.set(...)</em>.
+This is the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_and_set">aggregator <em>set</em></a> as known before
+but reading from the previous result <em>param</em>.</p>
+
+<p>Now <a href="https://overpass-turbo.eu/s/nxD">you can use a tag value</a> from a previous result as search criteria:</p>
+<pre>
+node({{bbox}})[name="Gare de Lyon RER D"]-&gt;.param;
+( node({{bbox}})[level](if:t[level]==param.set(t[level]));
+  way({{bbox}})[level](if:t[level]==param.set(t[level]));
+  rel({{bbox}})[level](if:t[level]==param.set(t[level])); );
+(._; &gt;;);
+out;
+</pre>
+<p>This finds not only the node representing part "RER D" but also all the elements on the same level.</p>
+
+<h2 id="comparing_tags">Comparing Tags</h2>
+
+<p>There is more than one tag to express vertical position in OpenStreetMap.
+The oldest one is <em>layer</em>.
+We are curious <a href="https://overpass-turbo.eu/s/nCP">if there are elements where the tags <em>level</em> and <em>layer</em> differ</a>:</p>
+<pre>
+( node({{bbox}})[level][layer](if:t[level]!=t[layer]));
+  way({{bbox}})[level][layer](if:t[level]!=t[layer]);
+  rel({{bbox}})[level][layer](if:t[level]!=t[layer]); );
+(._; &gt;;);
+out;
+</pre>
+<p>This query doesn't contain anything new
+but reuses features we already know.
+The only notable feature is the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Equality_and_inequality">non-equality operator</a>.
+Nonetheless this generalizes to a standard approach to compare object values within the same element.</p>
+
+<p>That an element has different values for the tags <em>level</em> and <em>layer</em>
+is not necessary the error to fix.
+According to <a href="https://wiki.openstreetmap.org/wiki/Key:layer">the documentation of the <em>layer</em> tag</a>,
+a <em>level</em> tag belongs to indoor elements while a <em>layer</em> tags belongs to outdoor elements.
+Hence, it is rather suspect if an element has both tags.
+For convenience, <a href="https://overpass-turbo.eu/s/nCZ">a query to find elements with both tags</a>:</p>
+<pre>
+( node({{bbox}})[level][layer];
+  way({{bbox}})[level][layer];
+  rel({{bbox}})[level][layer]; );
+(._; &gt;;);
+out;
+</pre>
+
+<p>Are in a complex scenario like this neighbourhood in Paris the layers properly set?
+We cannot check whether elements are tagged in the wrong vertical order,
+not without local knowledge.
+But we can check whether elements with the same <em>layer</em> value intersect
+- this is always an error.</p>
+
+<p>The <a href="https://overpass-turbo.eu/s/nD5">complete approach</a> is admittedly slow:</p>
+<pre>
+way({{bbox}})[layer]-&gt;.all;
+foreach.all(
+  node(w)-&gt;.children;
+  (
+    way.all(around:0)(if:t[layer]==u(t[layer]));
+    - way.all(bn.children);
+  );
+  (._; .result;)-&gt;.result;
+);
+.result out geom;
+</pre>
+<p>Also, the result is too dense to make sense of it.
+We will find a workaround in the next step.
+Nonetheless, I would like to explain how it works:</p>
+<p>The first line is a standard query for <em>ways</em> in the given <em>{{bbox}}</em> with an value for <em>[layer]</em>.
+Notable is the syntax to keep the result in a named bucket <em>all</em>. It is <em>-&gt;.all</em>.</p>
+<p>In the second line begins a <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#For-each_loop_.28foreach.29">foreach</a> block.
+It loops over the elements from the just-filled bucket <em>all</em>.
+The loop variable is the standard bucket <em>_</em>.
+Thus we have inside the loop both the loop element (in <em>_</em>) and the set of elements as a whole (in <em>all</em>) adressable.</p>
+<p>We skip the third line for a moment.
+The fourth to seventh line is a <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Difference"><em>difference</em> block</a>.
+In total, we want to keep only those ways that are close to the loop element but do not share a node with it.
+For this purpose we first collect in line five all ways that are close to the loop element.
+Then in line six, we cut out all elements that share a common node with the loop element.
+We need for line six the set of of nodes that are members of the loop element.
+We cannot easily collect them right here because that would interfere with the difference statement.
+Thus we collect them before the difference statement in line three and store them to another named bucket, <em>children</em>.</p>
+<p>Line five is a query with multiple conditions:</p>
+<ul>
+<li><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#By_input_set_.28.setname.29">The condition <em>.all</em></a> restricts the potential results to ways from the bucket <em>all</em>.
+This speeds up the query because we only need to check properties of already known elements
+and not collect a potentially large set of candidates from disk.</li>
+<li><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Relative_to_other_elements_.28around.29">The condition <em>(around:0)</em></a> restricts the result set further to those ways that intersect the loop element.</li>
+<li>The condition <em>[layer]</em> restricts the result to elements that have a layer tag.</li>
+<li>The condition <em>(if:t[layer]==u(t[layer]))</em> further restricts the result to only those elements that have the same layer as the loop element.
+Note the expression <em>u(t[layer])</em>: this is the aggregator <em>u</em> over the content of the standard bucket.
+The standard bucket contains at this point the loop element.
+Thus we get the <em>layer</em> value of that element.</li>
+</ul>
+<p>Finally, the line <em>(._; .result;)-&gt;.result;</em> is a sequence of three statements
+that together collect all the results in a common result bucket named <em>result</em>.
+To print the result (instead of printing a single random loop element)
+we prepend <em>out geom</em> by the name of the bucket to print from, i.e. <em>.result</em>.</p>
+
+<p>We can get the whole thing both faster and less packed by <a href="https://overpass-turbo.eu/s/nCT">inspecting layer-by-layer</a>:</p>
+<pre>
+make param val=-2 -&gt;.param;
+way({{bbox}})(if:t[layer]==param.u(t[val]))-&gt;.all;
+foreach.all(
+  node(w)-&gt;.children;
+  (
+    way.all(around:0)(if:t[layer]==param.u(t[val]));
+    - way.all(bn.children);
+  );
+  (._; .result;)-&gt;.result;
+);
+.result out geom;
+</pre>
+<p>This query yields all results for <em>layer</em> equals <em>-2</em>.
+You can adjust the value easily in line one by exchanging <em>-2</em> to something different.
+According to the wiki, integral values from <em>-5</em> to <em>5</em> shall be used.
+You can check will values really exist
+if you adapt a query like <a href="#levels">the value listing for <em>level</em></a>.</p>
+
+<h2 id="semicolon">Lists in Tags</h2>
+
+<p>Let us return to the <em>level</em> tag.
+What about elements which have multiple levels?</p>
+
+<p>Unfortunately, we do not have any features that break up strings so far.
+Thus the best I can offer is <a href="http://overpass-turbo.eu/s/nD6">the regular expression query to at least find where they are</a>:</p>
+<pre>
+( node({{bbox}})[level~";"];
+  way({{bbox}})[level~";"];
+  rel({{bbox}})[level~";"]; );
+out geom;
+</pre>
+<p>A further analysis of the situation shows that only level-changing features like steps and elevators have more than one level here.
+Excellent tagging!</p>
+
+<p>This is one of the three kinds of almost-number values I have addressed last week.
+The other two are numeric values with units and those with special syntax.
+I still would very much appreciate use cases for those kinds of values.
+This is necessary to figure out which features to develop next.</p>
+
+</body>
+</html>

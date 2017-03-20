@@ -3,9 +3,12 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
 <title>Finding Dark POIs</title>
 </head>
-<body style="font-family:sans-serif; width:30em; position:absolute; left:50%; margin-left:-15em">
+<body style="font-family:sans-serif; max-width:30em">
 
 <p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
 
@@ -24,7 +27,7 @@
 
 <p>The mapper who has mapped <a href="https://www.openstreetmap.org/node/4379801321">this node</a> may wonder
 why it never has appeared on the map:</p>
-<pre style="background-color:yellow;">
+<pre>
 node 4379801321: 51.5133578, -0.1015195
   name = Go Native
 </pre>
@@ -81,7 +84,7 @@ The second is out of scope for this blogpost.</p>
 <p>Suspicious objects are objects that are not well known.
 For ways, a very simplistic apporach could be the assumption
 that all ways are streets or buildings:</p>
-<pre style="background-color:yellow;">
+<pre>
 way({{bbox}})
   [!building]
   [!highway];
@@ -104,7 +107,7 @@ We need it to know where to display each way in the map window.</li>
 <p>The result has around 400 ways.
 Thst is pretty a lot for exceptions.
 Clicking on some of the features reveals further commonplace tags:</p>
-<pre style="background-color:yellow;">
+<pre>
 way({{bbox}})
   [!building]
   [!"building:part"]
@@ -126,7 +129,7 @@ Are all these ways mapping errors?
 No, they might be just members of relations.
 Collecting them needs some extra work:</p>
 
-<pre style="background-color:yellow;">
+<pre>
 rel({{bbox}})-&gt;.foo;
 ( way({{bbox}})
   [!building]
@@ -161,7 +164,7 @@ that are not a member of a relation from our bounding box (the second statement)
 we can omit all but tags in the result.
 For this, we switch from <em>out geom</em> to <em>out tags</em>.</p>
 
-<pre style="background-color:yellow;">
+<pre>
 rel({{bbox}})-&gt;.r;
 ( way({{bbox}})
   [!building]
@@ -178,7 +181,7 @@ out tags;
 <p>From this point we repeat the process until <a href="https://overpass-turbo.eu/s/nfA">we have excluded all the elements</a>
 that we can classify based on their most commonplace tag.</p>
 
-<pre style="background-color:yellow;">
+<pre>
 rel({{bbox}})-&gt;.r;
 ( way({{bbox}})
   [!amenity]
@@ -205,7 +208,7 @@ out geom;
 
 <p>Nodes and relations will have their own sets of tags.</p>
 
-<pre style="background-color:yellow;">
+<pre>
 way({{bbox}})-&gt;.w;
 ( node({{bbox}})
   [!"addr:street"]
@@ -227,7 +230,7 @@ We need to subtract twice other data from our potential result set.
 First we remove the nodes referred by ways, because these are by far the most nodes.
 Then we remove the nodes referred by relations.</p>
 
-<pre style="background-color:yellow;">
+<pre>
 rel({{bbox}})
   [!amenity]
   [!boundary]
@@ -273,7 +276,7 @@ If you were in 3D mapping you may want to walk through those objects
 instead of accepting them as of well-known type.</p>
 
 <p>Please note also that we easily might accept objects whose tagging does not make sense.
-For example, the tagging <em>type=nultipolygon</em> lets us accept <a href="https://www.openstreetmap.org/relation/5802680">relation 5802680</a>.
+For example, the tagging <em>type=multipolygon</em> lets us accept <a href="https://www.openstreetmap.org/relation/5802680">relation 5802680</a>.
 But that relation does not have any useful tag for classification.
 It has just a name and the property being a multipolygon.</p>
 
@@ -292,7 +295,7 @@ That is by far worse.</li>
 You can use the number of tags as filter criterion.
 <a href="https://overpass-turbo.eu/s/ngj">Get all nodes</a> which have a <em>name</em> tag but no other tag:</p>
 
-<pre style="background-color:yellow;">
+<pre>
 node({{bbox}})
   [name]
   (if:count_tags()==1);
@@ -314,7 +317,7 @@ This may or may not be improved in the next version.</li>
 More interesting is to search <a href="https://overpass-turbo.eu/s/ngE">for ways with no tags at all</a>.
 To get a relevant result set, we must exclude ways that are part of relations:</p>
 
-<pre style="background-color:yellow;">
+<pre>
 rel({{bbox}})-&gt;.foo;
 ( way({{bbox}})
     (if:count_tags()==0);
@@ -333,7 +336,7 @@ will be subject of a subsequent blog post.</p>
 
 <p>As nebulon42 <a href="https://lists.openstreetmap.org/pipermail/talk/2017-March/077648.html">has suggested</a>,
 you can <a href="https://overpass-turbo.eu/s/ntc">search for a lot of old-style multipolygons</a> this way:</p>
-<pre style="background-color:yellow;">
+<pre>
 relation({{bbox}})
   [type=multipolygon]
   (if:count_tags()==1);

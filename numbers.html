@@ -3,9 +3,12 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
 <title>Working with Numbers</title>
 </head>
-<body style="font-family:sans-serif; width:30em; position:absolute; left:50%; margin-left:-15em">
+<body style="font-family:sans-serif; max-width:30em">
 
 <p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
 
@@ -35,7 +38,7 @@ like the following one:</p>
 </figure>
 
 <p>We can <a href="https://overpass-turbo.eu/s/nrK">collect with a regular expression query</a> all lines with more than 100 kV:</p>
-<pre style="background-color:yellow;">
+<pre>
 area[name="Nederland"];
 way(area)[power=line][voltage~"^[1-9].....$"];
 out geom;
@@ -43,7 +46,7 @@ out geom;
 <p>But this is hard to read for all those that do not work all day with regular expressions.
 In addition, this would not match hypothetical transmission lines of 1000 kV or more.
 We would rather like to use the familar greater-equal operator:</p>
-<pre style="background-color:yellow;">
+<pre>
 area[name="Nederland"];
 way(area)[power=line](if:t[voltage]&gt;=100000);
 out geom;
@@ -57,7 +60,7 @@ To enable you to figure our yourself is the purpose of this blog post.</p>
 <h2 id="maxspeed">Maximum Speed</h2>
 
 <p>We start to <a href="https://overpass-turbo.eu/s/nrR">have a look</a> at the <em>maxspeed</em> tag on motorways around Cologne:</p>
-<pre style="background-color:yellow;">
+<pre>
 way({{bbox}})[highway=motorway]
   [maxspeed](if:t[maxspeed]&gt;120);
 out geom;
@@ -81,7 +84,7 @@ that have as <em>maxspeed</em> tag value a value greater than 120.</p>
 
 <p>More than expected of the roads seem to allow for high speed.
 But <a href="https://overpass-turbo.eu/s/nrO">a simple cross-check</a> should make you suspicious:</p>
-<pre style="background-color:yellow;">
+<pre>
 way({{bbox}})[highway=motorway]
   [maxspeed](if:t[maxspeed]&gt;200);
 out geom;
@@ -89,7 +92,7 @@ out geom;
 
 <p>Apparently, there is something going wrong here.
 This is why there are <a href="https://overpass-turbo.eu/s/nrP">some extra tools</a> to avoid these things:</p>
-<pre style="background-color:yellow;">
+<pre>
 way({{bbox}})[highway=motorway]
   [maxspeed](if:!is_number(t[maxspeed]));
 out geom;
@@ -105,7 +108,7 @@ that have as <em>maxspeed</em> tag value a value that is not a number.</p>
 
 <p>We get quite a large result, but not necessary a clue which values exist.
 To solve this <a href="https://overpass-turbo.eu/s/nrQ">we can employ</a> another new tool:</p>
-<pre style="background-color:yellow;">
+<pre>
 way({{bbox}})[highway=motorway]
   [maxspeed](if:!is_number(t[maxspeed]));
 make taginfo_of_cologne values=set(t[maxspeed]);
@@ -132,7 +135,7 @@ look at their <em>maxspeed</em> tag
 and tack all found values together with semi-colons.
 The result goes in a specified tag of a dedicated element.
 This should result in:</p>
-<pre style="background-color:yellow;">
+<pre>
   &lt;taginfo_of_cologne id=&quot;1&quot;&gt;
     &lt;tag k=&quot;values&quot; v=&quot;none;signals&quot;/&gt;
   &lt;/taginfo_of_cologne&gt;
@@ -161,7 +164,7 @@ A region with quite high peaks in Germany is Baden-Württemberg.</p>
 <p>With the approach from the previous section we only can find quite high peaks:</p>
 <pre>
 area[name="Baden-Württemberg"];
-node(area)[natural=peak](if:t[ele]>1000);
+node(area)[natural=peak](if:t[ele]&gt;1000);
 out geom;
 </pre>
 <p>In the result we have <a href="https://www.openstreetmap.org/node/783669174">the Sickersberg</a>,
@@ -174,7 +177,7 @@ Thus, the engine has included this node in the result.
 We should <a href="https://overpass-turbo.eu/s/nsR">take this into account</a>:</p>
 <pre>
 area[name="Baden-Württemberg"];
-node(area)[natural=peak](if:number(t[ele])>1000);
+node(area)[natural=peak](if:number(t[ele])&gt;1000);
 out geom;
 </pre>
 
@@ -182,7 +185,7 @@ out geom;
 we still want not all quite high but only the highest peak:</p>
 <pre>
 area[name="Baden-Württemberg"];
-node(area)[natural=peak](if:number(t[ele])>1000);
+node(area)[natural=peak](if:number(t[ele])&gt;1000);
 node._(if:t[ele]==max(t[ele]));
 out;
 </pre>
@@ -190,7 +193,7 @@ out;
 Let us walk through the query:</p>
 <ul>
 <li><em>area[name="Baden-Württemberg"]</em>: Selects all areas (actually only one) with name <em>Baden-Württemberg</em>.</li>
-<li><em>node(area)[natural=peak](if:number(t[ele])>1000)</em>:
+<li><em>node(area)[natural=peak](if:number(t[ele])&gt;1000)</em>:
 Selects all nodes within the given area (filter <em>(area)</em>)
 that have a tag with key <em>natural</em> and value <em>peak</em>
 and have a tag with key <em>ele</em> that evaluates to a number bigger than <em>1000</em>.</li>
@@ -210,13 +213,13 @@ This is written in three details:
 </ul>
 
 <p>Finally, <a href="https://overpass-turbo.eu/s/nrN">what values are the problem?</a></p>
-<pre style="background-color:yellow;">
+<pre>
 area[name="Baden-Württemberg"];
 node(area)[natural=peak](if:is_tag(ele) &amp;&amp; !is_number(t[ele]));
 out geom;
 </pre>
 <p>Reduced to the essential:</p>
-<pre style="background-color:yellow;">
+<pre>
 area[name="Baden-Württemberg"];
 node(area)[natural=peak](if:is_tag(ele) &amp;&amp; !is_number(t[ele]));
 make debug values=set(t[ele]);
@@ -233,20 +236,20 @@ out;
 <p>We proceed with another example to collect more problem classes.</p>
 
 <p>Let us revisit the query from the beginning:</p>
-<pre style="background-color:yellow;">
+<pre>
 area[name="Nederland"];
 way(area)[power=line](if:t[voltage]&gt;=100000);
 out geom;
 </pre>
 <p>We now know that the problem are the non-numeric values.
 And <a href="https://overpass-turbo.eu/s/ntd">we can fix</a> that:</p>
-<pre style="background-color:yellow;">
+<pre>
 area[name="Nederland"];
 way(area)[power=line](if:number(t[voltage])&gt;=100000);
 out geom;
 </pre>
 <p>But we are now interested in the non-numeric values:</p>
-<pre style="background-color:yellow;">
+<pre>
 area[name="Nederland"];
 way(area)[power=line](if:is_tag(voltage) &amp;&amp; !is_number(t[voltage]));
 make debug values=set(t[voltage]);
@@ -257,7 +260,7 @@ out geom;
 The reason are ways like <a href="https://www.openstreetmap.org/way/87345533">this</a> with a tag value <em>380000;110000</em>.</p>
 
 <p>We <a href="https://overpass-turbo.eu/s/nte">can overcome</a> that problem:</p>
-<pre style="background-color:yellow;">
+<pre>
 area[name="Nederland"];
 way(area)[power=line](if:is_tag(voltage) &amp;&amp; !is_number(t[voltage]));
 make debug values=set("{" + t[voltage] + "}");

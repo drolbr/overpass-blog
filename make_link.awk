@@ -10,5 +10,5 @@
 }
 END {
   if (filename != "index.html")
-    print published" "filename" "title;
+    print "<p>"published": <a href=\""filename"\">"title"</a></p>";
 }

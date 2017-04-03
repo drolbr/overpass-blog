@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Textual Results</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Textual Results</h1>
+
+<p>Published: 2017-04-03</p>
+
+<h3>Table of content</h3>
+
+<a href="#counting">Group and Count</a><br/>
+<a href="#closed_ways">Quite Always Nodes</a><br/>
+<a href="#comparison">Comparison Operators</a><br/>
+
+<h3>Personal Remarks</h3>
+
+<p>I am sorry that last week there has been no blog post.
+I simply have overstimated my resources
+and underestimated the time necessary to write a useful text.</p>
+
+<p>However, good news are that I managed to set up an <a href="https://dev.overpass-api.de/blog/rss.xml">RSS feed</a>.
+I promise to do my best to return to the weekly rhythm for the next weeks.
+There will be a development break when it is time to push forward the next version.
+But we are not yet there.</p>
+
+<h2 id="counting">Group and Count</h2>
+
+<p>When the German Railways had started to provide <a href="https://data.deutschebahn.com/">open data</a>,
+one of the first things they offered had been the status of elevators.
+That opened the question if and where elevators were missing in the OpenStreetMap data.
+To get concise information,
+we should count elevators in this case.</p>
+
+<p>At the same time this is a good starting point as
+one could expect that <a href="https://wiki.openstreetmap.org/wiki/Tag:highway=elevator">elevators</a> are always nodes.
+We will come back how to cross-check that assumption later
+and first figure out how to count groups of nodes.</p>
+
+<p>There is already a command to count results in Overpass API.
+As an example <a href="https://overpass-turbo.eu/s/o2v">we will count elevators in a bounding box</a>:</p>
+<pre>
+node({{bbox}})[highway=elevator];
+out count;
+</pre>
+
+<p>In fact, <em>out count</em> is a shorthand <a href="https://overpass-turbo.eu/s/o2u">for</a></p>
+<pre>
+node({{bbox}})[highway=elevator];
+make count
+  nodes = count(nodes),
+  ways = count(ways),
+  relations = count(relations),
+  total = count(nodes) + count(ways) + count(relations);
+out;
+</pre>
+
+<p>Now we attempt to get one derived element per station:</p>
+<pre>
+node({{bbox}})[railway=station];
+foreach(
+  node(around:100)[highway=elevator];
+  make count
+    nodes = count(nodes),
+    ways = count(ways),
+    relations = count(relations),
+    total = count(nodes) + count(ways) + count(relations);
+);
+out;
+</pre>
+<p>Please try it, it does not work.
+I have added this query to explain a frequent fallacy.
+The foreach statement does not collect the intermediate objects in the loop,
+hence this query delivers only the last result.
+The long term fix will be to alter the semantics of the foreach statement.
+For the moment, I would like to suggest two workarounds.</p>
+
+<p><a href="https://overpass-turbo.eu/s/o2t">The first one</a> is to move the <em>out</em> statement into the foreach loop:</p>
+<pre>
+node({{bbox}})[railway=station];
+foreach(
+  node(around:100)[highway=elevator];
+  make count
+    nodes = count(nodes),
+    ways = count(ways),
+    relations = count(relations),
+    total = count(nodes) + count(ways) + count(relations);
+  out;
+);
+</pre>
+<p>It is simple and does the job, but it is not necessarily fast.
+Also, his only works if do not want to do more with the result than printing it.</p>
+
+<p><a href="https://overpass-turbo.eu/s/o2s">The second solution</a> is to collect the desired intermediate result in a separate bucket.
+I have chosen the name <em>result</em> here:</p>
+<pre>
+node({{bbox}})[railway=station];
+foreach(
+  node(around:100)[highway=elevator];
+  make count
+    nodes = count(nodes),
+    ways = count(ways),
+    relations = count(relations),
+    total = count(nodes) + count(ways) + count(relations);
+  (._; .result)-&gt;.result;
+);
+.result out;
+</pre>
+<p>Please note that the <em>out</em> statement is set to read from <em>result</em>.
+I myself often tend to forget to set that.
+Other than that, we use the <em>union</em> statement
+to collect the per-loop content in the default set into the <em>result</em> set.</p>
+
+<p>The query is still less useful than it could be.
+We do have a list of anonymous counts, but we want to know the number of elevators per station.
+We need to have the station node still available at the <em>make</em> statement.</p>
+<pre>
+node({{bbox}})[railway=station];
+foreach(
+  node(around:100)[highway=elevator]-&gt;.n;
+  make count
+    name = set(t[name]),
+    nodes = n.count(nodes),
+    ways = n.count(ways),
+    relations = n.count(relations),
+    total = n.count(nodes) + n.count(ways) + n.count(relations);
+  (._; .result)-&gt;.result;
+);
+.result out;
+</pre>
+<p>For that <a href="https://overpass-turbo.eu/s/o2r">purpose</a> we move the collected nodes into a named set.
+I have chosen <em>n</em> as a simple name.
+And again, do not forget to adapat the <em>count</em> evaluators to the right set.</p>
+
+<p>We have succeded.
+To celebrate that,
+<a href="https://overpass-turbo.eu/s/o2p">we format the result as a pretty table</a>.</p>
+<pre>
+[out:csv(&quot;name&quot;,&quot;num_nodes&quot;,&quot;num_ways&quot;,&quot;num_relations&quot;)];
+node({{bbox}})[railway=station];
+foreach(
+  node(around:100)[highway=elevator]-&gt;.n;
+  make count
+    name = set(t[name]),
+    num_nodes = n.count(nodes),
+    num_ways = n.count(ways),
+    num_relations = n.count(relations);
+  (._; .result)-&gt;.result;
+);
+.result out;
+</pre>
+
+<h2 id="closed_ways">Quite Always Nodes</h2>
+
+<p>The good news is that you have help to sort out tagging questions.
+<em>Taginfo</em> gives <a href="https://taginfo.openstreetmap.org/tags/highway=elevator">an immediate overview</a>.
+There are indeed about 3000 ways that have a tagging <em>highway=elevator</em>.</p>
+
+<p>According <a href="https://wiki.openstreetmap.org/wiki/Tag:highway=elevator">to the wiki</a>,
+closed ways should be never tagged as <em>highway=elevator</em>.
+The trick is not take information from the wiki as granted
+but rather see this as a hint what tagging might make sense and what might be accidential.</p>
+
+<p>Unfortunately, neither the wiki nor taginfo could tell us which of these ways are closed ways.
+We want to cross-check which non-closed ways exist.
+I.e., we would like to have something like:</p>
+<pre>
+way[highway=elevator];
+way._(if:<strong>???</strong>); // we want a filter for closed ways
+out geom;
+</pre>
+<p>As a spoiler, there is again not a proper solution, but a workaround for the moment being.</p>
+
+<p>We could again use the <em>foreach</em> statement and the various counting properties:</p>
+<pre>
+way[highway=elevator];
+foreach(
+  node(w)-&gt;.n;
+  way._(if:n.count(nodes) &lt; count_members());
+  (._; .result)-&gt;.result;
+);
+.result out geom;
+</pre>
+<p>Let us walk through the idea of the query.
+We build around one important observation:
+<em>A way is closed if it has less child nodes than member entries.</em>
+This is not strictly logically true,
+because self-intersecting ways could be be non-closed and still have more member entries than child nodes.
+But self-intersecting ways are both deprecated and very rare,
+such that we can neglect that for this workaround.</p>
+
+<p>We get the number of child nodes with a similar approach like we got the elevators.
+We query the desired elements into a named set, here again <em>n</em>,
+and they do not interfere with the rest of the query except being counted.
+The remainder is the helper construction to gather the result.</p>
+
+<p>Unfortunately, the whole thing is unnecessary slow.
+For this purpose we look up at the <em>combinations</em> tab <a href="https://taginfo.openstreetmap.org/tags/highway=elevator">of the taginfo page</a> likely candidates for area only tags.
+You can cross-check with the wiki that e.g. the key <em>building</em> shall amongst ways only be applied to closed ways.
+We can filter out all of them.
+Their sheer number would make them rather candidates for <a href="https://wiki.openstreetmap.org/wiki/UK_quarterly_project_ideas">quarterly projects</a>.
+Or <a href="https://wiki.openstreetmap.org/wiki/DE:Wochenaufgabe">similar</a> <a href="https://wiki.openstreetmap.org/wiki/MapRoulette">projects</a>.</p>
+
+<p>This leads us to almost a solution:</p>
+<pre>
+way[highway=elevator][!building][!area];
+foreach(
+  node(w)-&gt;.n;
+  way._(if:n.count(nodes) &lt; count_members());
+  (._; .result)-&gt;.result;
+);
+.result out geom;
+</pre>
+<p>We do not want <em>building</em> or <em>area</em> tags.
+But unfortunately, the Overpass scheduler makes for building tags sometimes a bad guess,
+bceause it appears <a href="https://taginfo.openstreetmap.org/keys/building">really often</a>.
+We can overcome this by <a href="https://overpass-turbo.eu/s/o2T">deferring the negated tags</a>:</p>
+<pre>
+way[highway=elevator];
+way._[!building][!area];
+foreach(
+  node(w)-&gt;.n;
+  way._(if:n.count(nodes) &lt; count_members());
+  (._; .result)-&gt;.result;
+);
+.result out geom;
+</pre>
+
+<h2 id="comparison">Comparison Operators</h2>
+
+<p>I had promised for last week a discussion about comparison operators.
+This opens up possibilities how to finally set the behaviour of the comparison operator here.</p>
+
+<p>First of all, we essentially need to care only for one operator.
+We want that <em>a &lt; b </em> if and only if <em>b &lt; a</em>.
+Similarly, we want <em>a &lt;= b</em> if and only if <em>b &lt;= a</em>.
+Finally, we want that <em>a &lt;= b </em> is true if and only if <em>a &gt; b</em> is false.
+Hence, if we agree on rules for <em>&lt;=</em> then we have rules for all comparison operators.</p>
+
+<p>A couple of other rules make the comparison useful:</p>
+<ul>
+<li>It shall be reflexive, i.e. <em>a &lt;= a</em> for every possible object <em>a</em>.</li>
+<li>It shall be anti-symmetrical, i.e.
+if both <em>a &lt;= b</em> and <em>b &lt;= a</em> are true then <em>a</em> must be the same as <em>b</em>.</li>
+<li>It shall be transitive, i.e.
+if <em>a &lt;= b</em> and <em>b &lt;= c</em> then also <em>a &lt;= c</em>.</li>
+<li>And it shall be total, i.e.
+at least one of <em>a &lt;= b</em> or <em>b &lt;= a</em> shall be true.</li>
+</ul>
+<p>For example, if comparison were not transitive and anti-symmetrical then you could not use it to sort things.
+Sorting is already degraded if a comparison operator is not also total.</p>
+
+<p>All of these properties are straightforward for simple numbers.
+They were also fulfilled for strings if you sort strictly lexicographically.
+Most problems arise from type conversion, i.e.
+from autodetecting whether the involved strings shall be rather treated as numbers
+because they could be understood so.
+Some extra problems come from special values.</p>
+
+<p>A simple example are the three values <em>2</em>, <em>10</em> and <em>1m</em>.
+Because <em>2</em> and <em>10</em> are numbers they compare as <em>2 &lt;= 10</em>.
+Because <em>1m</em> is not a number, the values <em>2</em> and <em>1m</em> are compared as strings,
+hence <em>1m &lt;= 2</em>.
+For the same reason, the values <em>1m</em> and <em>10</em> are compared as strings,
+hence <em>10 &lt;= 1m</em>.
+This violates transitivity:
+<em>10 &lt;= 1m</em> and <em>1m &lt;= 2</em>, but not <em>10 &lt;= 2</em>.</p>
+
+<p>As a consequence,
+you can have more hits for the condition <em>t["addr:housenumer"] &lt;= 2</em>
+than for the condition <em>t["addr:housenumer"] &lt;= 10</em>,
+because <em>1m</em> does not match <em>t["addr:housenumer"] &lt;= 10</em>.</p>
+
+<p>There are various approaches to get around this:</p>
+<ul>
+<li>Programming languages like C++ and Java use a strong typing system
+such that you simply never could compare <em>1m</em> as a number.
+We do not have type information in tags,
+hence such a solution would be relatively unintuitive.</li>
+<li>JavaScript and some other languges do implicit type conversion.
+This is essentially equivalent to what Overpass does right now.
+The downside is that most simple expressions are prone to produce unexpected results.</li>
+<li>Bash has different names for type conversion of different type,
+i.e. <em>&lt;=</em> is always a string based comparsion.
+It is at least much easier to spot errors this way.
+On the downside, I'm not sure how many people can then understand why <em>2 &lt;= 10</em> is false.</li>
+</ul>
+
+<p>I'm still considering whether a bash like solution could be compelling
+or whether there should be some way of strong typing.
+Please feel free to give feedback on this or other questions.
+I'm always trying to shape QL such that simple tasks can be done with straightforward queries.</p>
+
+</body>
+</html>

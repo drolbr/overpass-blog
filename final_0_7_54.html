@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Version 0.7.54 Completed</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Version 0.7.54 Completed</h1>
+
+<p>Published: 2017-04-10</p>
+
+<h3>Table of content</h3>
+
+<a href="#name_tag">Reassembled Name Tags</a><br/>
+<a href="#ref_lists">What Calls Here</a><br/>
+<a href="#is_in">Where Is It</a><br/>
+
+<p>With this blog post, we complete the presentation of new features of version 0.7.54.
+As you have seen in the various remarks of the last weeks,
+there is still room to improve the software.
+Hence, I will put priority on developing Overpass API further now and for some weeks .</p>
+
+<p>There are a lot of excellent examples on the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_API_by_Example">Examples Page</a> in the Wiki.
+Unfortunately, these can easily get lost in that rather large page.
+For this reason, I will present in the upcoming weeks some examples from that page here.</p>
+
+<h2 id="name_tag">Reassembled Name Tags</h2>
+
+<p>Have you ever panned the map to China?
+For me, it is hard to use it there because I cannot make sense even of the letters.
+This would not apply to a Chinese.
+Hence, there is a reason to build the name tag according to the user's capabilities.</p>
+
+<p>On the other hand, a lot of cities simply do not have names in foreign languages.
+Therefore, we want a set of rules
+that we can easily configure
+and that could make sense of all combinations of name tags we find.</p>
+
+<p>We work with a European multi-language country, Switzerland,
+because it is easier to debug the results there.
+A straightforward approach would be
+to first collect all towns and then do some magic on their names:</p>
+<pre>
+area["name:en"="Switzerland"];
+node(area)[place~"^(city|town)$"];
+convert node name=???(t["name"], t["name:de"], t["name:fr"]);
+out;
+</pre>
+<p>But this would not enable us to disentangle the various cases:</p>
+<ul>
+<li>There could be a <em>name</em> tag and no language specific name tags.</li>
+<li>There could be a <em>name</em> tag and one or both language specific name tags.</li>
+<li>Multiple of the tags could be identical.</li>
+</ul>
+<p>Do not forget that there are even Italian speaking regions in Switzerland.</p>
+
+<p>We therefore <a href="https://overpass-turbo.eu/s/og6">make the rules explicit</a> in the query:</p>
+<pre>
+area["name:en"="Switzerland"];
+node(area)[place~"^(city|town)$"];
+node._["name:fr"]["name:de"]-&gt;.de_fr;
+node._["name"]["name:de"](if:t["name"]!=t["name:de"])-&gt;.de_name;
+( node._["name"]; - (.de_fr; .de_name;); )-&gt;.name;
+node._["name:fr"][!"name"]-&gt;.fr;
+( .de_fr convert extra_node
+    ::id=id(),name=t["name:de"] + " (" + t["name:fr"] + ")";
+  .de_name convert extra_node
+    ::id=id(),name=t["name:de"] + " (" + t["name"] + ")";
+  .name convert extra_node
+    ::id=id(),name=t["name"];
+  .fr convert extra_node
+    ::id=id(),name=t["name:fr"];
+);
+out;
+</pre>
+<p>We produce one named set per case:</p>
+<ul>
+<li><em>de_fr</em>: All elements that have both a German and a French name tag</li>
+<li><em>de_name</em>: All elements that do not belong to <em>de_fr</em> and have a German tag different from the name tag</li>
+<li><em>name</em>: All elements that belong to neither <em>de_fr</em> nor <em>de_name</em> but have at least a name tag</li>
+<li><em>fr</em>: All elements that do not have a name tag and due to the previous conditions also no German name tag but have at least a French name tag</li>
+</ul>
+<p>Please note that we explicitly exclude the former cases from the latter cases to avoid having duplicate entries.
+Once we have separated each relevant combination into its proper named set,
+we can apply convert on each set with a suitable set of rules.
+The embracing <em>union</em> query ensures that we have in the end all derived elements in a single result.</p>
+
+<p>A task for you: Could you produce a French-first version.
+What about a trilingual version including Italian?</p>
+
+<p>Unfortunately, the effect is not visible on the <em>map</em> view.
+To see the results you should open the <em>data</em> tab in Overpass Turbo.
+You then have the produced name in the <em>extra_node</em> element.</p>
+
+<p>This is also the reason for using <em>::id=id()</em>:
+<em>::id=</em> allows to explicitly set the id of the derived element.
+You could use any numerical expression here,
+but just reusing the id of the underlying element allows to reassign them as easy as possible afterwards.</p>
+
+<p>This inconvenience stems from that the produced tags do not have coordinates.
+You can partly overcome this <a href="https://overpass-turbo.eu/s/og7">by just adding the coordinate information</a> in an extra <em>out</em>statement:</p>
+<pre>
+area["name:en"="Switzerland"];
+node(area)[place~"^(city|town)$"];
+node._["name:fr"]["name:de"]-&gt;.de_fr;
+node._["name"]["name:de"](if:t["name"]!=t["name:de"])-&gt;.de_name;
+( node._["name"]; - (.de_fr; .de_name;); )-&gt;.name;
+node._["name:fr"][!"name"]-&gt;.fr;
+( .de_fr convert extra_node
+    ::id=id(),name=t["name:de"] + " (" + t["name:fr"] + ")";
+  .de_name convert extra_node
+    ::id=id(),name=t["name:de"] + " (" + t["name"] + ")";
+  .name convert extra_node
+    ::id=id(),name=t["name"];
+  .fr convert extra_node
+    ::id=id(),name=t["name:fr"];
+);
+out;
+( .de_fr;
+  .de_name;
+  .name;
+  .fr;
+);
+out skel;
+</pre>
+<p>Using <em>out skel</em> means that you get just the coordinates and not also all the other tags.
+You can then match the information based on the ids of the elements.
+This is admittedly only practical
+if you have few results
+or if you post-process the data with software.
+Because of this, the long-term solution will be to support geometry in the next version of Overpass API.</p>
+
+<h2 id="ref_lists">What Calls Here</h2>
+
+<p>Occasionally one can find in the <em>ref</em> tag of a bus stop the list of services calling there.
+This is not what the tag is intended for.
+The best way to convince people that this is not an information worth manual maintenance
+is to create this content on the fly.</p>
+
+<p>We start with a simple case, a traffic hub in Dusseldorf, Germany.
+We want to add for each <em>node</em> that represents a bus stop
+an <em>extra_node</em> that lists the services calling there.</p>
+
+<p>We <a href="https://overpass-turbo.eu/s/oge">can combine</a> the principle of collecting extra data <a href="textual_data.html#closed_ways">first seen here</a>
+with the <em>set</em> operator on a tag</p>:
+
+<pre>
+( node({{bbox}})[highway=bus_stop];
+  node({{bbox}})[public_transport=platform]; );
+foreach(
+  out;
+  rel[type=route](bn)-&gt;.r;
+  convert extra_node
+  	::id=id(),
+    rel_ref=r.set(t["ref"]);
+  out;
+);
+</pre>
+<p>The heart of the request is to collect the relations relative to each node in a named set <em>r</em>.
+This enables us to make a set of their <em>ref</em> tags as an expression in the <em>convert</em>statement.</p>
+
+<p>This works slow, but does in the <em>data</em> tab its job.
+However, in different locations, the request does not work
+because the stops or the relations are modeled different.</p>
+
+<p>We <a href="https://overpass-turbo.eu/s/oh5">adapt the query</a> to figure out what is going on:</p>
+<pre>
+( node({{bbox}})[highway=bus_stop];
+  node({{bbox}})[public_transport=platform]; );
+foreach(
+  rel(bn)-&gt;.r;
+  make marker;
+  out;
+  .r out tags;
+);
+</pre>
+<p>We still <em>recurse</em> inside the <em>foreach</em> loop.
+What we have changed is that we dump all the tags of the relations found
+to get a better idea what relations are there.
+To allow to easily tell apart the individual groups per stop,
+we print a <em>marker</em> in front of each group of results per node.
+It turns out that the service information is missing.</p>
+
+<h2 id="is_in">Where Is It</h2>
+
+<p>I would like to conclude with an example from practice.
+We were asked which stations under administration of the traffic agency
+<em>Verkehrsverbund Rhein-Ruhr</em> have platforms equal or below level <em>-2</em>.
+For the traffic agency, this breaks down to the question
+which platforms are mapped in OSM at or below level <em>-2</em>.</p>
+
+<p>Because some station names exist in multiple cities,
+it is necessary to amend the station names with the names of the cities they are in.</p>
+
+<p><a href="https://overpass-turbo.eu/s/ogt">The query</a> has two parts:</p>
+
+<pre>
+area[name="Verkehrsverbund Rhein-Ruhr"]-&gt;.a;
+(
+  ( way(area.a)[public_transport=platform]
+     (if:is_tag(level)&amp;&amp;number(t[level])<=-2);
+    way(area.a)[railway=platform]
+     (if:is_tag(level)&amp;&amp;number(t[level])<=-2); );
+  
+  rel[type=public_transport](bw);
+
+  (  rel(area.a)[public_transport=platform]
+     (if:is_tag(level)&amp;&amp;number(t[level])<=-2);
+    rel(area.a)[railway=platform]
+     (if:is_tag(level)&amp;&amp;number(t[level])<=-2); );
+  
+  rel[type=public_transport](br);
+);
+
+foreach(
+  &gt; -&gt;.n;
+  .n is_in-&gt;.c;
+  area.c[admin_level~"^[68]$"]-&gt;.c;
+  make foo Name=set(t[name]),Stadt=c.set(t[name]);
+  out tags;
+);
+</pre>
+
+<p>The first paragraph employs the filtering for numbers as <a href="numbers.html#maxspeed">first presented here</a>.
+The new thing happens in the <em>foreach</em> loop:
+We make our own <em>is_in</em> tag.
+This is done with the same technique as in the previous section.
+The most important thing to observe is that <em>is_in</em> currently only works on nodes.
+This requires us to go down to the nodes in a first step with <em>&gt; -&gt;.n</em>.</p>
+
+</body>
+</html>

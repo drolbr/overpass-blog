@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Some State of the Public Transport</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Some State of the Public Transport</h1>
+
+<p>Published: 2017-04-24</p>
+
+<h3>Table of content</h3>
+
+<a href="#bus_yn">Maybe for Buses</a><br/>
+<a href="#orphan_stop_pos">Not Calling for Passengers</a><br/>
+<a href="#full_table">Somewhere in Europe</a><br/>
+
+<h3>Remarks</h3>
+
+<p>I have just finished to reorganize <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_API_by_Example">the examples page</a> in the wiki.
+The reorganization may or may not help in navigating the page.
+My motivation is to understand
+what the goals are
+that the Overpass API users are after.
+I will revise the individual items later on.</p>
+
+<p>As it turns out, one large subject is <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_API_by_Example#Tagging">to understand and count tagging combinations</a>.
+This is a good opportunity to answer some recurring questions about
+how public transport tagging is actually in the field.</p>
+
+<h2 id="bus_yn">Maybe for Buses</h2>
+
+<p>The most loudly announced issue in the Public Transport v2 scheme is the transition from <em>highway=bus_stop</em> to <em>public_transport=platform</em> and <em>public_transport=stop_position</em>.
+The former is for bus stops that are modeled by their sign beside the road.
+The latter is for bus stops that are modeled by an estimation of the stop position of the vehicle.
+We will first take care of the platforms.</p>
+
+<p>Along with <em>public_transport=platform</em> these stops should have been tagged <em>bus=yes</em>
+to distinguish these platforms from platforms for other means of transport.
+So we have already three tags to care for: <em>highway=bus_stop</em>, <em>public_transport=platform</em>, and <em>bus=yes</em>.</p>
+
+<p>A clean solution would be to check any of the eight possible combinations.
+However, this example should tell you to notice when we do self-deception.
+I do it right now and take the unchecked assumptions that:</p>
+<ul>
+<li>Names serve as an indicator how good the general mapping level is.
+Hence, we are only interested in the fraction of named stops amongst all stop.
+These are stops tagged with any of the two other tags or both.</li>
+<li>The tag <em>bus=no</em> or <em>bus=yes</em> only makes sense on elements anyway tagged with <em>public_transport=platform</em>.</li>
+</ul>
+
+<p>This means we have to master the following building blocks:</p>
+<ol>
+<li>Collect all nodes that have any of the two tags <em>public_transport=platform</em> or <em>highway=bus_stop</em>!</li>
+<li>Figure out the fraction of named objects amongst them!</li>
+<li>Tell the fraction of nodes amongst all <em>public_transport=platform</em> nodes that have a <em>bus=yes</em> or <em>bus=no</em> tag!</li>
+</ol>
+<p>From these requirements <a href="https://overpass-turbo.eu/s/oAb">I suggest</a>:</p>
+
+<pre>
+area[name="Antwerpen"];
+( node(area)[highway=bus_stop];
+  node(area)[public_transport=platform]; );
+node._[name]-&gt;.with_name;
+node._[public_transport=platform]-&gt;.pt;
+node.pt[bus=no]-&gt;.not_bus;
+node.pt[bus=yes]-&gt;.explicit_bus;
+make count
+  all=count(nodes),
+  with_name=with_name.count(nodes),
+  pt=pt.count(nodes),
+  not_bus=not_bus.count(nodes),
+  explicit_bus=explicit_bus.count(nodes);
+out;
+</pre>
+
+<p>Let us reassign the lines to the requirements:</p>
+<ol>
+<li>Lines 2 to 3 contain the usual <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union"><em>union</em> statement</a> with two usual <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Filters"><em>query</em> statements</a> inside.</li>
+<li>Line 4 copies from all found elements only those that have a <em>name</em> tag.
+This is pretty fast by using the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Item"><em>item</em> filter</a> to reuse the previous result.</li>
+<li>In a similar manner, we copy in lines 5 to 7 in a cascade elements
+to get the number nodes tagged as <em>public_transport=platform</em> and <em>bus=yes</em> or <em>bus=no</em>.</li>
+</ol>
+
+<p>For the friends of advanced presentation,
+<a href="https://overpass-turbo.eu/s/oAM">a variant</a> that really writes fractions in the usual percent notation:</p>
+
+<pre>
+area[name="Antwerpen"];
+( node(area)[highway=bus_stop];
+  node(area)[public_transport=platform]; );
+node._[name]-&gt;.with_name;
+node._[public_transport=platform]-&gt;.pt;
+node.pt[bus=no]-&gt;.not_bus;
+node.pt[bus=yes]-&gt;.explicit_bus;
+make count
+  all=count(nodes),
+  with_name=with_name.count(nodes)/count(nodes)*100 + " %",
+  pt=pt.count(nodes)/count(nodes)*100 + " %",
+  not_bus=not_bus.count(nodes)/pt.count(nodes)*100 + " %",
+  explicit_bus=explicit_bus.count(nodes)/pt.count(nodes)*100 + " %";
+out;
+</pre>
+
+<p>It looks like at least <em>bus=yes</em> has been carefully applied everywhere
+- and that the <a href="https://en.wikipedia.org/wiki/Trams_in_Antwerp">Antwerp tram and light rail</a> is modeled in a somehow different way.</p>
+
+<h2 id="orphan_stop_pos">Not Calling for Passengers</h2>
+
+<p>Now to the nodes with <em>public_transport=stop_position</em>
+- it is time for another unchecked assumption:
+there are no stops where passengers can neither board nor alight
+(<a href="https://fr.wikipedia.org/wiki/Porte_Molitor_(m%C3%A9tro_de_Paris)">really</a>? And houses <a href="https://en.wikipedia.org/wiki/Leinster_Gardens">always have entrances</a>?)
+Hence we search for stop positions that have no nearby platforms.</p>
+
+<p>This can be archived in the following steps:
+First, being close to is always reciprocal.
+Thus, it is always worth consideration whether we search for one side or the other first.
+I opt for searching for platforms here.
+Second, platforms can be nodes, ways, or relations.
+Thus we need the usual construction of an <em>union</em> statement and multiple <em>query</em> statements.</p>
+
+<p>We <a href="https://overpass-turbo.eu/s/oAa">cut out</a> of all the stop positions those stop positions
+that are close to a platform, i.e. at most 10 meters away from a platform:</p>
+
+<pre>
+area[name="Milano"]-&gt;.a;
+( node(area.a)[public_transport=platform];
+  way(area.a)[public_transport=platform];
+  rel(area.a)[public_transport=platform]; )-&gt;.platforms;
+( node(area.a)[public_transport=stop_position];
+  - node._(around.platforms:10)->.matched; )-&gt;.orphans;
+make count
+  all=count(nodes),
+  orphans=orphans.count(nodes);
+out;
+</pre>
+
+<p>This number may justify the hypothesis that there are still a lot of unmatched stop positions.</p>
+
+<h2 id="full_table">Somewhere in Europe</h2>
+
+<p>It is time to cross-check whether our test cities are representative.
+For the sake of comfort the two queries can be merged into a single query.
+To get a concise overview it is best to take a sample fo cities across Europe
+and <a href="https://overpass-turbo.eu/s/oA9">to make a table out of the results</a>:</p>
+
+<pre>
+[out:csv("name", "all", "orphans", "with_name", "pt", "not_bus", "explicit_bus")];
+( area[name="Hamburg"]["admin_level"=4];
+area[name~"^(München|Köln|Milano|Napoli|Birmingham|Manchester|Barcelona|Antwerpen)$"]["admin_level"=6];
+  area[name~"^(Lille|Lyon|Marseille)$"]["admin_level"=7];
+  area[name="Rotterdam"]["admin_level"=8];
+)-&gt;.areas;
+
+foreach.areas-&gt;.a(
+  ( node(area.a)[public_transport=platform];
+    way(area.a)[public_transport=platform];
+    rel(area.a)[public_transport=platform]; )-&gt;.platforms;
+  ( node(area.a)[public_transport=stop_position];
+    - node._(around.platforms:10); )-&gt;.orphans;
+  ( node.platforms;
+    node(area.a)[highway=bus_stop]; )-&gt;.stops;
+  node.stops[name]-&gt;.with_name;
+  node.stops[public_transport=platform]-&gt;.pt;
+  node.pt[bus=no]-&gt;.not_bus;
+  node.pt[bus=yes]-&gt;.explicit_bus;
+  make count
+    name=a.set(t[name]),
+    all=stops.count(nodes),
+    orphans=orphans.count(nodes),
+    with_name=with_name.count(nodes),
+    pt=pt.count(nodes),
+    not_bus=not_bus.count(nodes),
+    explicit_bus=explicit_bus.count(nodes);
+  out;
+);
+</pre>
+
+<p>I got on 24 Apr 2017 the results:</p>
+
+<table>
+<tr><th>name</th><th>all</th><th>orphans</th><th>with_name</th><th>pt</th><th>not_bus</th><th>explicit_bus</th></tr>
+<tr><td>Manchester</td><td>1</td><td>0</td><td>0</td><td>0</td><td>0</td><td>0</td></tr>
+<tr><td>Birmingham</td><td>3991</td><td>18</td><td>3933</td><td>142</td><td>0</td><td>9</td></tr>
+<tr><td>Barcelona</td><td>3397</td><td>766</td><td>2685</td><td>574</td><td>0</td><td>360</td></tr>
+<tr><td>Marseille</td><td>2330</td><td>71</td><td>2297</td><td>712</td><td>1</td><td>7</td></tr>
+<tr><td>Napoli</td><td>1710</td><td>344</td><td>1235</td><td>70</td><td>0</td><td>65</td></tr>
+<tr><td>Lyon</td><td>3748</td><td>339</td><td>3712</td><td>3570</td><td>0</td><td>3522</td></tr>
+<tr><td>Milano</td><td>4529</td><td>535</td><td>4007</td><td>841</td><td>0</td><td>687</td></tr>
+<tr><td>München</td><td>2215</td><td>71</td><td>2206</td><td>128</td><td>0</td><td>122</td></tr>
+<tr><td>Lille</td><td>2873</td><td>149</td><td>2842</td><td>2711</td><td>0</td><td>450</td></tr>
+<tr><td>Antwerpen</td><td>7554</td><td>111</td><td>7519</td><td>7521</td><td>0</td><td>7300</td></tr>
+<tr><td>Rotterdam</td><td>737</td><td>481</td><td>733</td><td>137</td><td>0</td><td>94</td></tr>
+<tr><td>Köln</td><td>1659</td><td>307</td><td>1648</td><td>528</td><td>0</td><td>135</td></tr>
+<tr><td>Hamburg</td><td>3766</td><td>410</td><td>3717</td><td>1150</td><td>1</td><td>1110</td></tr>
+</table>
+
+<p>Hence, we can state that</p>
+<ul>
+<li>Names found indeed almost universal acclaim.
+Only some cities in southern Europe have relatively fewer names.
+And even them are around 70%.</li>
+<li>The <em>public_transport</em> key based tagging is not so universally accepted.
+Some cities have hardly any stops at all tagged with <em>public_transport</em>.
+Other cities have <em>public_transport</em> but only few of them marked as <em>bus=yes</em>.</li>
+<li>Next to nowhere exist platform nodes with <em>bus=no</em>.</li>
+<li>The fraction of orphan stop positions without platforms also varies widely between cities.</li>
+</ul>
+
+</body>
+</html>

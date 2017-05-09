@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>In OSM We Trust</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>In OSM We Trust</h1>
+
+<p>Published: 2017-05-09</p>
+
+<h3>Table of content</h3>
+
+<a href="#ibm">Nobody Gets Fired</a><br/>
+<a href="#orwell">Ministry of Truth</a><br/>
+<a href="#privacy">Discrimination</a><br/>
+<a href="#ideas">Approaches</a><br/>
+
+<p>Working on <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_API_by_Example">the examples</a> made some progress.
+So does also the conversion of enhancement suggestions to new features.</p>
+
+<p>There is quite <a href="https://lists.openstreetmap.org/pipermail/talk/2017-May/077940.html">a huge discussion</a> about a new inconvenience on another important OSM tool, <a href="https://hdyc.neis-one.org">HDYC</a>.
+As the problem of personal data or potential personal data also affects Overpass API,
+I would like to dedicate this week's blog on the issue.</p>
+
+<h2 id="ibm">Nobody Gets Fired</h2>
+
+<p>As we do not get any further just piling up opinions and personal taste,
+I would like to go back a step to see the bigger picture:
+What is OpenStreetMap?</p>
+
+<p>Our standard answer are:
+It is a comprehensive and free database of general purpose geodata.
+And it is even more the community of people concerned about growing and maintaining it.</p>
+
+<p>So why should be have an open database?
+Beside the convenience, there is a more fundamental aspect: Trust.</p>
+
+<p>Or with an historical bonmot:
+<a href="https://en.wikipedia.org/wiki/Fear,_uncertainty_and_doubt#Definition">Nobody gets fired for buying IBM.</a>
+The phrase was coined by the then-incumbent IBM.
+It means that everybody else, in particular your boss,
+will have infinitely more trust in the incumbent than in any competitor.
+Tracing this further does explain why software markets tend to have monopolies or oligopolies.</p>
+
+<p>This is where Open Source kicks in:
+It remains available even if your supplier goes bankrupt or changes his mind or whatsoever.
+You can check that it does and only does what it pretends to do.
+<a href="https://www.gnu.org/philosophy/philosophy.html">And more.</a>
+Hence you can trust it.</p>
+
+<h2 id="orwell">Ministry of Truth</h2>
+
+<p>There are a lot of other aspects where design decisions have been governed to deserve the users' trust.
+A <a href="https://en.wikipedia.org/wiki/Digital_preservation">whole discipline of art and science</a> is about storing documents such that you can later proof they have been unaltered.</p>
+
+<p>This is an important aspect of OpenStreetMap as well.
+We do have the history and user data as well to prove that all the data has been gathered by individuals
+and not by large-scale copyright breach.</p>
+
+<p>Note that this is not only a proof that something has been entered in the database.
+It is even more a proof that something that never appeared in the database has never been entered.
+By the way, we lose that proof if we <a href="https://wiki.openstreetmap.org/wiki/Data_working_group/Redactions">need to tamper with history</a>.
+It is a shame for our society if copyright law requires us to do so.</p>
+
+<p>Orwell had <a href="https://en.wikipedia.org/wiki/Nineteen_Eighty-Four">explained</a> to us where this slippy road leads to.
+The <a href="https://en.wikipedia.org/wiki/Ministries_of_Nineteen_Eighty-Four#Ministry_of_Truth">Minithruth's ability to rewrite history</a> is crucial for that dictatorship to keep control of the humans.
+So do not forget that the ability to trust our records is one crucial thing that protects us.
+It is again about trust.</p>
+
+<h2 id="privacy">Discrimination</h2>
+
+<p>The other key factor of that dictatorship is to exploit the human's fear.
+That dictatorship is able to fabricate any accusation they want because they know enough bits about anyone.
+That brings us back to the issue of privacy.
+There is no point in listing and denouncing scenarios.
+It is more about the <a href="https://en.wikipedia.org/wiki/Black_swan_theory">unknown unknown</a> than about the known unknown.</p>
+
+<p>It is very similar to discrimination.
+Discrimination is when you do not know whether it is bad fate or intentionally bad treatment.
+Or terrorism:
+No terror group would ever be capable to kill or injure a significant porion of all citizens.
+But nonetheless, any of us may fear to fall victim to a terror attack
+because we do not know when and where it is dangerous.</p>
+
+<p>So yes, privacy is again all about trust. Like OSM.</p>
+
+<p>This brings us a different view:
+A good privacy design should be straightforward
+once we know how to maximize the total trust in OpenStreetMap.</p>
+
+<p>As we are always short of mappers,
+their trust is key to the project's success.
+Mappers that have a long history of editing build trust in the sustainability of the project.
+Mappers with diverse background build more easily trust with their fellows.
+Hence, both must be kept in mind.</p>
+
+<h2 id="ideas">Approaches</h2>
+
+<p>I would like to present three approaches that have been discussed in the German community
+and check them against the trust criterion.</p>
+
+<h3>Blurring Data after Time</h3>
+
+<p>One idea presented was to somehow made timestamps less precise after a long time.
+The hope had been to retain the ability to overcome vandalism
+while enabling long time privacy for mappers.</p>
+
+<p>From a trust point of view, it is a non-solution:
+The trust in the integrity of our data is lost, because you cannot properly reconstruct the database's history.
+And no trust in privacy can be deserved because the mis-use of data reasonably could have already taken place.</p>
+
+<p>The details of a technical implementation are even worse.
+Hence we better abandon that idea.</p>
+
+<h3>Sub Accounts</h3>
+
+<p>Another idea mentioned by <a href="https://www.openstreetmap.org/user/imagico">Imagico</a> has been to allow for sub-accounts.
+This means that either automatically or by the users choice you could get a new user id.
+In database speak, any single user could have many different roles.
+The OSMF would still have the association between the editing roles.
+But you could have a full planet file with roles data
+without being able to trace back edits to users unless they explicitly want you to.</p>
+
+<p>In principle, this would be possible right now
+if you create enough email addresses to have many accounts.
+And it is even <a href="https://wiki.openstreetmap.org/wiki/Import/Guidelines#Use_a_dedicated_user_account">encouraged by the community</a> to separate distinct duties
+like a revert account from a business account or a personal account.
+We essentially change that practice from tolerated to encouraged.</p>
+
+<p>This does not harm trust:
+The integrity of the database is preserved.
+It may slightly degrade if much users would try to get a role per changeset.
+It may even improve if users do sort edits by their intent or context.</p>
+
+<p>To get that in context just have a look at these <a href="https://overpass-api.de/achavi/?changeset=48437159">two</a> <a href="https://overpass-api.de/achavi/?changeset=48437054">changesets</a>:
+They would be a typical candidate to go to a spearate sub-account.
+Either they are valuable on their own regardless which OSM aware visitor has made them.
+Or they should be dismissed based on their content, not the user's reputation.
+On the other hand, being bound to my account like at the moment
+they leak the information that I have been recently to Liège.</p>
+
+<p>The approach earns more trust from the mappers
+because there is an easy-to-control tool to minimize the privacy footprint.
+And they do not interfere with reputational trust
+because mappers can keep an unlimited collection of their edits if they want to.</p>
+
+<h3>Contractual Protection</h3>
+
+<p>The most disucssed approach was to make privacy related data only accessible after OSM login.
+The idea is to set up a contractual obligation to use this data only to maintain the OSM data
+and to prove its integrity.
+The login then serves as a clear reminder that you have privacy related data in your fingers.</p>
+
+<p>To clarify:
+Changeset ids, timestamps, version numbers and so on are quite clearly not privacy related.
+Affected by this limitation would be user ids and user names.</p>
+
+<p>This again does increase mapper's trust:
+They are at least protected by legislation.
+There is still plenty room for unknown privacy violations,
+but the legal protection comes at no price.
+It does not interfere with reputational trust because the data is fully available within the project.
+Also, it does not interfere with the database integrity for the same reason.</p>
+
+<p>As Sub Accounts and Contractual Protection both produce a gain in trust
+we should pursue both ideas further.
+Even more, they can be combined.</p>
+
+</body>
+</html>

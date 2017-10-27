@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Running a Server with systemd</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Running a Server with <em>systemd</em></h1>
+
+<p>Published: 2017-10-27</p>
+
+<h3>Table of content</h3>
+
+<a href="#security">Overpass API Security &hellip;</a><br/>
+<a href="#safety">&hellip; and Safety</a><br/>
+<a href="#systemd_desktop">Desktop Features</a><br/>
+<a href="#one_job">SystemD: You had One Job</a><br/>
+<a href="#directions">Directions</a><br/>
+
+<p>Amongst the aims of Overpass API is
+to make <a href="https://overpass-api.de/no_frills.html">the installation</a> as easy as possible.
+In fact, it has been simplified to only the three standard commands:</p>
+<pre>
+./configure
+make
+make install
+</pre>
+
+<p>You also need to have the prerequisites ready (a compiler, wget and expat).
+But it is highly unlikely to meet a working Linux installation without.
+Even if they were not installed: it is just one command away:</p>
+<pre>
+sudo apt-get install wget g++ make expat libexpat1-dev zlib1g-dev
+</pre>
+
+<p>An installation only makes sense if you execute the installed software afterwards.
+This is also designed to be easy:</p>
+<ol>
+<li>Download the database content</li>
+<li>Start the database management system (DBMS) daemon</li>
+<li>Make queries as you want</li>
+</ol>
+
+<p>Each of these steps is again a simple command.
+There is no need to build wrapper scripts or edit configuration files.</p>
+
+<p>Things get complicated once one tries to actively involve systemd.
+Essentially this is because systemd is not designed to run a DBMS.
+I will explain details below.</p>
+
+<h2 id="security">Overpass API Security &hellip;</h2>
+
+<p>Overpass API shall and can run on a wide range of systems:</p>
+<ul>
+<li>Linux</li>
+<li>Any BSD flavor</li>
+<li>MacOS</li>
+<li>Windows at least via cygwin</li>
+</ul>
+<p>The only way to support such a wide range of systems from a small project is
+to find a common base for all the operating systems.
+This is to compile the software at the target system
+and to rely solely on <a href="http://pubs.opengroup.org/onlinepubs/9699919799/">POSIX</a> standard features.</p>
+
+<p>The system is carefully designed to nowhere need root permissions.
+Unlike for Windows, <a href="https://en.wikipedia.org/wiki/File_system_permissions#Traditional_Unix_permissions">user permissions</a> have always been a vital layer of security in the POSIX model.
+For this reason, most software is carefully designed to <a href="https://docs.docker.com/engine/security/security/#conclusions">require no root permissions</a>.
+An example are web servers like Apache and database systems like PostgreSQL.
+Each of them has a dedicated user with as few permissions as possible.</p>
+
+<p>As an extra bonus of the no-root-policy you can install an Overpass instance on a system
+where you do not have special permissions at all.
+These shared repsonsibilities have for example taken place on the Rambler instance.</p>
+
+<p>There are only few permanently running components,
+in particular the dispatcher, fetch_osc, and apply_osc_to_db.
+They are designed to be controlled from the command line.
+Do not forget: a useful server will be permanently up.
+The public instance is booted once or twice per year or so,
+and booting is almost always in the context of serious trouble.
+A manual check is anyway unavoidable in such a situation.</p>
+
+<p>The second most probable scenario is running the server on a laptop.
+Testing with suspend-to-RAM or suspend-to-disk did run smoothly.
+Such a system is next to never doing a reboot.</p>
+
+<p>If you really need to regularly boot on systems that run permanent services
+then you should use the crontab:
+Read the help that you get from <em>man crontab</em> in the command line.
+Then edit the file <em>bin/reboot.sh</em> according to the instructions in the file.
+Then run <em>crontab -e</em> and add:</p>
+<pre>
+@reboot nohup /path/to/overpass/bin/reboot.sh
+</pre>
+<p>The crontab is a feature to run a command at a defined point in time.
+This includes the option to run them each time after the system is back from a reboot.
+According to my tests, the crontab turned out to be widely available
+even if it is not part of the POSIX standard.</p>
+
+<h2 id="safety">&hellip; and Safety</h2>
+
+<p>Beside security we also want safety.
+This means that the system should come to a controlled stop if something is wrong.
+This protects the database from becoming corrupted.</p>
+
+<p>This safety is ensured via <a href="https://en.wikipedia.org/wiki/File_locking#Lock_files">lock files</a>.
+Both the update process and the dispatcher write and check for the presence or absence
+of some files and whether the files link to the process that tries to obtain them.
+If a process decides to error out instead of deleting or rewriting them
+then it is because it is highly likely that it has run into a severe error.</p>
+
+<p>The problems reported in the context of systemd invocation
+all were either caused by or severly worsened by external deletion of lock files.
+<em>External</em> means triggered by the systemd config file.
+By the way, the example file for systemd's predecessor, called <em>Upstart</em>, had the same problem.</p>
+
+<h2 id="systemd_desktop">Desktop Features</h2>
+
+<p>We just noticed a thing to avoid with systemd.
+How shall we invoke systemd instead properly?
+The answer requires in addition to the background information about Overpass API
+background information about <a href="http://www.zdnet.com/article/linus-torvalds-and-others-on-linuxs-systemd/">systemd</a>.</p>
+
+<p>systemd has been designed to speed up the boot process of desktop computers.
+As explained above, booting is of little relevance on any system
+that runs a service waiting to answer requests.
+It is an <a href="https://en.wikipedia.org/wiki/Anti-pattern">anti-pattern</a> indicating a faulty design.</p>
+
+<p>In particular, systemd makes some default assumptions that are lethal to DBMSs:</p>
+
+<p>A feature of DBMS are the so called <a href="https://en.wikipedia.org/wiki/Unix_domain_socket">sockets</a>.
+A socket is a point in the file system that you can connect to.
+One can compare it with browsing the web:
+Your web browser figures out by the URL a place where it can send data to (the request)
+and then gets other data back (the response, in this metaphor, the web page).
+For sockets, insteads of the URL you have a path in the file system where you send data to.
+There should be a service listening and answering to you.
+Hence, the socket should exist exactly as long as the process runs that listens on that socket.</p>
+
+<p>systemd is by default configured to instead delete the socket if a user logs out.
+This is usually an unrelated event.
+A common workflow is to login, start the daemon and then log out.
+Of course, you do not want to break down the daemon at that point.
+I will not judge whether there is a use case in the context of a desktop environment.
+But for a daemon this is both surprising and lethal.</p>
+
+<p>There is another mean of communication used by a DBMS called <a href="http://pubs.opengroup.org/onlinepubs/009695399/functions/shm_open.html">shared memory</a>.
+Again, systemd is messing up with that.
+And Overpass API relies on both Unix Domain Sockets and shared memory.</p>
+
+<h2 id="one_job">SystemD: You had One Job</h2>
+
+<p>Both systemd and the idea to start a DBMS by a systemd config file
+are at odds with the <a href="https://en.wikipedia.org/wiki/Unix_philosophy">Unix philosophy</a>:</p>
+<blockquote>Do one thing and do that well</blockquote>
+<p>There have been numerous complaints that systemd has feature creep:</p>
+<ul>
+<li><a href="https://lists.luv.asn.au/pipermail/luv-main/2014-October/006851.html">a list</a></li>
+<li><a href="https://www.reddit.com/r/linux/comments/3u2ahq/whats_wrong_with_systemd/">another list</a></li>
+<li><a href="https://chiefio.wordpress.com/2016/05/18/systemd-it-keeps-getting-worse/">a more in-depth analysis</a></li>
+</ul>
+<p>But I do not even refer to that.</p>
+
+<p>It is a serious task and systemd's task to organise during the boot process the steps
+that have to be done to get all hardware to proper operation.
+Starting software payload is a completely different story.
+This is even more true if the software is meant to run permanently.</p>
+
+<p>I would like to give you a metaphor:
+In most offices there is a network printer.
+The network printer is permanently running, but still connected via a plug in a power outlet.
+systemd's job is to do the electric wiring and painting the walls.
+And finally making electricity available via power outlets adhering to a norm (in our case: POSIX).
+It is a stupid idea to carve away the power outlet, cut off the printer's plug
+and hard-wire the printer to building's wires.</p>
+
+<p>This is what you do when you try to start <em>Overpass API</em> directly from <em>systemd</em>.</p>
+
+<p>Deleting the lock files corresponds in this metaphor to bypassing the fuses
+both in the device and the building.
+This jeopardizes the building, the printer, and all users.
+Do not do it.
+It is the step from bad idea to gross negligence.</p>
+
+<h2 id="directions">Directions</h2>
+
+<p>So what to do else?</p>
+
+<figure>
+<img src="taped_signposts.jpg" style="width:20em;"/>
+<figcaption>Directions can be non-obvious. Found in Ireland, 2016</figcaption>
+</figure>
+
+<p>First the suggestions to you as user:
+The preferred way to run the service is to log in, issue</p>
+<pre>
+nohup /path/to/overpass/bin/dispatcher --osm-base --meta \
+  --db-dir="/path/to/the/overpass/data/" &
+</pre>
+<p>and the subsequent commands from <a href="https://overpass-api.de/no_frills.html">the installation guide</a>.
+Then log out.
+If systemd is running in the background or not,
+the POSIX specification asserts you that everything is going to run smoothly.</p>
+
+<p>As extra bonus, this works on any of the mentioned operating systems and without special permissions.</p>
+
+<p>If you do need to have a server that starts Overpass API in the course of the boot process:
+Edit the file <em>bin/reboot.sh</em> as explained there and put it into the crontab:</p>
+<pre>
+@reboot nohup /path/to/overpass/bin/reboot.sh
+</pre>
+<p>This mode is relatively new.
+Therefore, you are encouraged <a href="mailto:overpass.2017-10@olbricht.nrw">to ask back</a>
+if you run into trouble.
+I'm happy to help you because I want to make this into a well-understood mode of operation.</p>
+
+<p>Please do not try to run anything as root or to programmatically delete lock files.</p>
+
+</body>
+</html>

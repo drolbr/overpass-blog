@@ -98,7 +98,7 @@ foreach(
 );
 </pre>
 <p>It is simple and does the job, but it is not necessarily fast.
-Also, his only works if do not want to do more with the result than printing it.</p>
+Also, this only works if we do not want to do more with the result than printing it.</p>
 
 <p><a href="https://overpass-turbo.eu/s/o2s">The second solution</a> is to collect the desired intermediate result in a separate bucket.
 I have chosen the name <em>result</em> here:</p>
@@ -139,7 +139,7 @@ foreach(
 </pre>
 <p>For that <a href="https://overpass-turbo.eu/s/o2r">purpose</a> we move the collected nodes into a named set.
 I have chosen <em>n</em> as a simple name.
-And again, do not forget to adapat the <em>count</em> evaluators to the right set.</p>
+And again, do not forget to adapt the <em>count</em> evaluators to the right set.</p>
 
 <p>We have succeded.
 To celebrate that,
@@ -203,7 +203,7 @@ We query the desired elements into a named set, here again <em>n</em>,
 and they do not interfere with the rest of the query except being counted.
 The remainder is the helper construction to gather the result.</p>
 
-<p>Unfortunately, the whole thing is unnecessary slow.
+<p>Unfortunately, the whole thing is unnecessarily slow.
 For this purpose we look up at the <em>combinations</em> tab <a href="https://taginfo.openstreetmap.org/tags/highway=elevator">of the taginfo page</a> likely candidates for area only tags.
 You can cross-check with the wiki that e.g. the key <em>building</em> shall amongst ways only be applied to closed ways.
 We can filter out all of them.

@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Loop and Group</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Loop and Group</h1>
+
+<p>Published: 2018-05-15</p>
+
+<h3>Table of content</h3>
+
+<a href="#nwr">Any Type</a><br/>
+<a href="#if">Ask again</a><br/>
+<a href="#for">Groups</a><br/>
+<a href="#complete">Loops</a><br/>
+
+<h2 id="nwr">Any Type</h2>
+
+<p>Often, one does not know beforehand the OSM type of a query result.
+In particular, almost all real world objects can be modeled as a node,
+a way, or a closed way depending on their spatial extent.</p>
+
+<p>But have a look at <a href="https://www.openstreetmap.org/relation/6768907">this platform</a> on the map.
+It is split by a railway track going through,
+thus it should be modeled as a relation to result in a single object:</p>
+
+<figure>
+<img src="split_platform.png" style="width:20em;"/>
+<figcaption>A platform that is split by a railtrack going through</figcaption>
+</figure>
+
+<p>Up to now, a query must be phrased with an <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union"><em>union</em></a> statement
+and the conditions repeated several times in that case:</p>
+
+<pre>
+( node({{bbox}})[public_transport=platform];
+  way({{bbox}})[public_transport=platform];
+  relation({{bbox}})[public_transport=platform]; );
+out geom;
+</pre>
+
+<p>The new syntax <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_Query_Statement"><em>nwr</em></a> allows <a href="https://overpass-turbo.eu/s/yNS">to simplify this query</a>:</p>
+
+<pre>
+nwr({{bbox}})[public_transport=platform];
+out geom;
+</pre>
+
+<p>For the record:
+While this example works fine for some tools, in particular for <em>Overpass Turbo</em>,
+it does not work for all tools so far.
+In particular it does not and cannot work for <em>JOSM</em>.
+The reason is that <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Print_.28out.29"><em>out geom</em></a> generates a slightly non-OSM-standard result syntax
+to enrich the result objects directly with geometry.
+The auxilliary ways and nodes to just help with representing the geometry can be omitted that way.</p>
+
+<p>JOSM expects strict OSM standard with version numbers for all objects.
+It cannot do otherwise because OSM objects in JOSM should be editable,
+and OSM objects without the proper version number cannot be uploaded back to the OSM database.</p>
+
+<p>To get a minimal result that is standard conforming,
+one <a href="https://overpass-turbo.eu/s/yNU">needs</a> to <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Recurse_down_.28.3E.29">recurse down</a> and use <em>out meta</em>.
+For most practical purposes, these last two lines do the job:</p>
+
+<pre>
+nwr({{bbox}})[public_transport=platform];
+(._;>;);
+out meta;
+</pre>
+
+<h2 id="if">Ask again</h2>
+
+<p>Sometimes it is helpful to have a fallback level.
+For example, do you know, for a given location, how far the next post box is?
+Me not.
+Thus, we might get way too much results if we make the search radius too big or
+no results at all if we make the search radius too small.</p>
+
+<p>To <a href="https://overpass-turbo.eu/s/yNO">overcome this situation</a>
+there is now an <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_if"><em>if</em></a> statement in the query language.
+The condition is <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Evaluators">an evaluator</a>:</p>
+
+<pre>
+node[amenity=post_box](around:300,51.178061,4.4214484);
+if (count(nodes) == 0)
+{
+  node[amenity=post_box](around:1000,51.178061,4.4214484);
+}
+out;
+</pre>
+
+<p>The first line is a standard query for post boxes,
+based on the relevant tag and <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Relative_to_other_elements_.28around.29">a radius around a coordinate</a>.
+The second line contains the keyword <em>if</em> and the evaluator <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Statistical_Count">count(nodes)</a> == 0</em>.
+The fourth line is then the same thing as the first line with a bigger radius.
+It is enclosed in curly braces.
+These braces denote the conditional block of the <em>if</em> statement.</p>
+
+<p>To lessen the mental burden of remembering the query language,
+the syntax for block statements has been changed to curly braces, like in JavaScript and Java.
+The only exception is <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union">union</a>:
+because it has no keyword, it is distinguished by keeping the parentheses-semicolon syntax.
+The old syntax can still be used for all block statements and will not be removed.</p>
+
+<p>If the first query has a non-empty result
+then the second query inside the statement block is never executed.
+The result of the first query is then printed in the last line.
+If the first query has an empty result
+then the second query is executed,
+and its result replaces the empty result of the first query.
+Then, finally, the result of the second query is printed.</p>
+
+<p>The evaluator is not limited to counting.
+Any evaluator that does not need an element can be used.
+For example, you can check whether
+a certain tag <a href="https://overpass-turbo.eu/s/yNP">appears</a> in the result set <a href="https://overpass-turbo.eu/s/yNQ">or not</a>:</p>
+
+<pre>
+node[name]({{bbox}});
+if (set(t["name:de"]) != "" && set(t["name:fr"]) != "")
+{
+  make warning text="Multiple language specific name tags "
+      + "found. Please use language preferences.";
+  out;
+}
+else
+{
+  out;
+}
+</pre>
+
+<p>The first line searches for named nodes in the given bounding box.
+The second line is the <em>if</em> statement with the interesting condition:
+<em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_and_Set">set</a>(<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Tag_Value_and_Generic_Value_Operators">t["name:de"]</a>)</em> compiles a list of all values for the tag <em>"name:de"</em> in the result.
+If there is any such tag then the result is nonempty.
+Likewise we check for "name:fr" values.
+If we have both then it is highly likely that we want to choose a language instead of just working with <em>name</em>.</p>
+
+<p>In this case a warning message <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_make">is compiled</a> (line 4 and 5) and printed (line 6).</p>
+
+<p>If not both extra French and extra German names exist
+then, in line 9, the result is printed.</p>
+
+<p>Another example: one can <a href="https://overpass-turbo.eu/s/yNR">spot non-numeric values</a> if one needs numbers:</p>
+
+<pre>
+node[natural=peak][ele]({{bbox}});
+if (min(is_number(t["ele"])) == 1)
+{
+  node._(if:number(t["ele"]) == max(number(t["ele"])));
+  out;
+}
+else
+{
+  node._(if:!is_number(t["ele"]));
+  make warning text="Non-numeric values for ele found: "
+      + set("{" + t["ele"] + "}");
+  out;
+}
+</pre>
+
+<p>Line 1 is a simple combined query for the bounding box and the two tags <em>natural</em>
+(must be present and equal to <em>peak</em>) and <em>ele</em> (must be present with any value).</p>
+
+<p>Line 2 is the interesting check:
+the expression <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Min_and_Max"><em>min(...)</em></a> evaluates its inner expression for each element
+and returns the lowest value.
+<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Number_Check.2C_Normalizer_and_Suffix"><em>is_number(t["ele"])</em></a> is <em>1</em> or <em>0</em>,
+depending on whether <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Tag_Value_and_Generic_Value_Operators"><em>t["ele"]</em></a> is a number or not.
+Because <em>0</em> is lower than <em>1</em>,
+the whole expression is <em>1</em>
+if and only if elements exist and for all elements the value of <em>ele</em> can be understood as number.</p>
+
+<p><a href="https://overpass-turbo.eu/s/yO6">If so</a> then lines 4 to 5 are executed.
+Line 4 is a check similar to <a href="numbers.html#peaks">this blog post section</a>.
+Line 5 outputs these nodes with maximum value.</p>
+
+<p><a href="https://overpass-turbo.eu/s/yNR">If not so</a> then lines 9 to 11 are executed.
+Line 9 drops all numeric values from the results:
+We query for all objects of type <em>node</em> that are <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#By_input_set_.28.setname.29">from the previous result</a> (<em>._</em>)
+and for which <em>is_number(t["ele"])</em> is false.
+In line 10 an error message is compiled from a fixed text
+and <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_and_Set">a semicolon separated list</a> of all expressions <em>"{" + t["ele"] + "}"</em>,
+i.e. all <em>ele</em> values of the in <em>._</em> remaining objects enclosed in curly braces.</p>
+
+<h2 id="for">Groups</h2>
+
+<p>Sometimes we rather want to sort the found objects into groups.
+A very typical case is the one asked for in <a href="https://github.com/drolbr/Overpass-API/issues/395">the Github issue 395</a>:</p>
+
+<p><em>In a given bounding box, which values of </em>building:condition<em> exist and
+how many buldings are mapped for each value?</em></p>
+
+<p>The existing <em>foreach</em> loop does not solve the problem
+because it treats each element individually.
+But also the often used <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_and_Set"><em>set("{"+...+"}")</em></a> trick does not help:
+There is no way to convey extra information beside the expressions from the evaluation.</p>
+
+<p>This is why there is now a loop called <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_for"><em>for</em></a>:
+Syntactically similar to <em>if</em>, it gets a single evaluator as argument.
+The example mentioned before <a href="https://overpass-turbo.eu/s/yNL">can be written</a> as:</p>
+
+<pre>
+way[building](23.6948,90.3907,23.7248,90.4235);
+for (t["building:condition"])
+{
+   make stat "building:condition"=set(t["building:condition"]),
+       count=count(ways);
+   out;
+}
+</pre>
+
+<p>The first line is a standard query for objects of type <em>way</em> with tag <em>building</em>
+inside a specific bounding box.
+Line 2 is the new structure: <em>for</em> is the keyword.
+The evalutor is the rest of the line and executed for each element.
+There are four different values that appear, <em>average</em>, <em>good</em>, <em>poor</em>,
+and the empty string.
+Thus, the block of statements is executed four times.
+Each time the block contains the subset of the input set of all the objects
+that evaluate to the respective value.</p>
+
+<p>Thus, we can count the objects with <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Statistical_Count"><em>count(ways)</em></a> in line 5 per value.
+In line 4, the expression <em>set(t["building:condition"])</em> delivers the value of the tag for the subset.</p>
+
+<p>Because it is sometimes expensive or difficult to re-compute the loop evalutor
+there is a shortcut <em>&lt;Setname&gt;.val</em> to get the value computed by the <em>for</em> loop:</p>
+
+<pre>
+way[building](23.6948,90.3907,23.7248,90.4235);
+for (t["building:condition"])
+{
+   make stat "building:condition"=_.val,
+       count=count(ways);
+   out;
+}
+</pre>
+
+<p>Technically, this is a property the variable is set to by the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_for"><em>for</em></a> statement.
+If the variable is overwritten, for example by a statement result stored there,
+then the value is lost.</p>
+
+<p>If we want to do the same thing to list highways by their classification
+then we run into the problem that the count of way is misleading.
+Short sections in complex junctions get unduely important.
+A much more precise indicator is to <a href="https://overpass-turbo.eu/s/yOf">get the summarized length per highway classification</a>.</p>
+
+<p>For this reason, the element-dependent function <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Length"><em>length()</em></a> is available:</p>
+
+<pre>
+way[highway]({{bbox}});
+for (t["highway"])
+{
+   make stat highway=_.val,
+       count=count(ways),length=sum(length());
+   out;
+}
+</pre>
+
+<p>To get the total length,
+we use in line 5 the aggregator <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Sum"><em>sum(...)</em></a> over the element specific function <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Length"><em>length()</em></a>.</p>
+
+<p>There is also a special evaluator to sort elements by the keys they are tagged with.
+It will be covered in a later blog post.</p>
+
+<p>Finally, we have the slight problem that there are relatively few tools out there
+which can take advantage of free-form XML.
+For that reason, one can tell Overpass API to output CSV instead.
+The last example restated <a href="https://overpass-turbo.eu/s/yOg">such that</a> you can make a spreadsheet from that:</p>
+
+<pre>
+[out:csv(count,length,highway)];
+way[highway]({{bbox}});
+for (t["highway"])
+{
+   make stat highway=_.val,
+       count=count(ways),length=sum(length());
+   out;
+}
+</pre>
+
+<p>The important thing here is the first line:
+<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#CSV_output_mode"><em>[out:csv(...)]</em></a> in the first line is the declaration to control the output format.
+The declarations are always separated from the statements by a single semicolon.
+Within the parentheses, you can simply list the tag values (or some special values)
+that are used to select the columns to display.
+We have chosen the tag values ourself with the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_make"><em>make</em></a> statement.</p>
+
+<h2 id="complete">Loops</h2>
+
+<p>Overpass API does not get a general conditional loop, aka <em>while</em>.
+The rationale for this is that conditional loops are very prone for infinite looping.
+While it is annoying when you have an infinite loop eating up your CPU at home,
+it is a major problem for a shared public resource.
+Even a surprisingly tiny fraction of clumsy users could clog up a public service with infinite loops.</p>
+
+<p>The most common use case for a conditional loop in queries
+is to discover a complete network after it has already been discovered partially.
+The example we work along is to find a complete street in a situation
+where another street of the same name exists in the same municipality.
+Searching for the name within the municipality <a href="https://overpass-turbo.eu/s/yNG">delivers all of them at once</a>.
+But these are clearly multiple distinct objects.</p>
+
+<pre>
+area[name="Berlin"];
+way(area)[name="Hauptstraße"];
+out center;
+</pre>
+
+<p>On the other hand, choosing a single object of these does not help either
+because OSM splits a street of the same name if its other properties differ in different sections.
+<a href="https://overpass-turbo.eu/s/yNH">A tiny subset</a> of a probably much longer street:</p>
+
+<pre>
+way(547372893);
+out geom;
+</pre>
+
+<p>We could get the immediately adjacent segments by recursing up and down,
+but we <a href="https://overpass-turbo.eu/s/yNI">are</a> still not even close to be complete:</p>
+
+<pre>
+way(547372893);
+node(w);
+way(bn)[name="Hauptstraße"];
+out geom;
+</pre>
+
+<p>Line 1 is the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#By_element_id">query for a single object</a>.
+Line 2 is a <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Recurse_.28n.2C_w.2C_r.2C_bn.2C_bw.2C_br.29">recurse down</a> to get all the nodes of the previous result.
+Line 3 is a query for all the ways <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Recurse_.28n.2C_w.2C_r.2C_bn.2C_bw.2C_br.29">that have a node from the previous result</a>
+and have for the tag <em>name</em> the value <em>Hauptstraße</em>.
+Line 4 <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Print_.28out.29">outputs</a> the result.</p>
+
+<p>This is where <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_complete"><em>complete</em></a> is useful.
+The loop with the block of statements <a href="https://overpass-turbo.eu/s/yNJ">is now executed</a>
+until the result does not change anymore between two loop runs:</p>
+
+<pre>
+way(547372893);
+complete
+{
+  node(w);
+  way(bn)[name="Hauptstraße"];
+}
+out geom;
+</pre>
+
+<p>Lines 2 and 3 of the previous query have been moved into the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_complete"><em>complete</em></a> block.
+This means that
+the interpreter repeats to execute the recurse-down-recurse-up pair
+until the result of the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Recurse_.28n.2C_w.2C_r.2C_bn.2C_bw.2C_br.29">recurse-up</a> is the same as after the previous loop.</p>
+
+<p>Now assume you had forgotten the <em>[name="Hauptstraße"]</em>.
+This means that you get inadvertently not just the accordingly named ways but all connected ways.
+To avoid that you draw the street network of at least complete Eurasia,
+the <em>complete</em> loop has always an upper loop count limit.
+<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_complete">The current default is 4096</a>,
+but this may be changed later to keep control of the load on the public instances.</p>
+
+<p>You can set that limit to your value of choice with a parameter in parentheses after the keyword.
+In this example, this <a href="https://overpass-turbo.eu/s/yNK">lets us</a> get only a part of this cluster of <em>Hauptstraße</em> named streets.
+If you are curious then try values 1 to 12 for the value 3 in line 2.
+You will see the connected streets growing progressively.</p>
+
+<pre>
+way(547372893);
+complete(3)
+{
+  node(w);
+  way(bn)[name="Hauptstraße"];
+}
+out geom;
+</pre>
+
+<p>There are many more variants to use <em>complete</em>.
+For example, you can use <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Relative_to_other_elements_.28around.29">an around filter</a> in the block to <a href="https://overpass-turbo.eu/s/yOz">bridge over</a> small gaps
+if the street is not connected:</p>
+
+<pre>
+way(547372893);
+complete
+{
+  way(around:30)[name="Hauptstraße"];
+}
+out geom;
+</pre>
+
+<p>Or a completely different thing:
+People had asked to get an entire stream networks, and so on.</p>
+
+<p>Next week we will continue with timestamp related block statements.</p>
+
+</body>
+</html>

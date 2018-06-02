@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Sliced Time and Space</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Sliced Time and Space</h1>
+
+<p>Published: 2018-06-02</p>
+
+<h3>Table of content</h3>
+
+<a href="#lrs">Speedup by Lists</a><br/>
+<a href="#keys">Grouping by key</a><br/>
+<a href="#compare">Comparing Diffs</a><br/>
+<a href="#timeline">All versions</a><br/>
+
+<p>I am later with this blog post than I like, and I am sorry for that.
+While I prepared this blog post, I have found (and fixed ) two further bugs
+- what use have examples if the engine does not work?
+The bugs <a href="https://github.com/drolbr/Overpass-API/commit/9da5e7ae35d7ac6a1cd066c792eee64693a512ae">are now fixed</a> and the fixes deployed.</p>
+
+<p>Back to this blog post:
+From the last post still open is grouping by keys.
+This will fill the larger part of this blog post.
+The remaining part covers a block statement to filter diffs by custom criteria
+and two statements that allow to see all versions of an object in one go.</p>
+
+<figure>
+<img src="mont_rachais.jpg" style="width:20em;"/>
+<figcaption>A beautiful place somewhere in France</figcaption>
+</figure>
+
+<h2 id="lrs">Speedup by Lists</h2>
+
+<p>We have already seen in the <a href="file:///home/roland/osm3s/blog/loop_and_group.html#for">group section of the last post</a>
+how to <a href="https://overpass-turbo.eu/s/zgd">make a statistic</a> about the usage of the various values of a key:</p>
+
+<pre>
+[out:csv(nodes,ways,rels,key,value)];
+area[name="Grenoble"];
+nwr(area)["addr:street"];
+for(t["addr:street"])
+{
+  make stat value=_.val,
+      nodes=count(nodes),ways=count(ways),rels=count(relations);
+  out;
+}
+</pre>
+
+<p>Can we also just list values of <em>addr:street</em>
+for which no street of the same name exists?
+A naive approach:</p>
+
+<pre>
+[timeout:900]
+[out:csv(nodes,ways,rels,value)];
+area[name="Grenoble"]-&gt;.a;
+nwr(area.a)["addr:street"];
+for (t["addr:street"])
+{
+  way(area.a)[highway](if:t["name"]==_.val)-&gt;.samename;
+  if (samename.count(ways) == 0)
+  {
+    make stat value=_.val,
+        nodes=count(nodes),ways=count(ways),rels=count(relations);
+    out;
+  }
+}
+</pre>
+
+<p>This is painfully slow.
+Thus we need a better solution.
+The first step is to understand what happens:
+The new lines are lines 7 and 8.
+In line 7 the query gets all ways within the area
+that have a tag <em>highway</em> and where the tag <em>name</em> is equal to the value in question.
+Then in line 8 we check if we have ways found or not.</p>
+
+<p>The problem is the query inside the loop.
+We are looping about 1500 times, thus the query in line 7 is going to read the same 10 or so blocks 1500 times.
+Even if the delay of the disk is as low as 10 milliseconds
+then we already need 150 seconds for that part of the loop.</p>
+
+<p>How to get rid of the request?
+<a href="https://overpass-turbo.eu/s/zge">We can do</a> the disk activity beforehand
+and just do computations within the loop:</p>
+
+<pre>
+[out:csv(nodes,ways,rels,value)];
+area[name="Grenoble"]-&gt;.a;
+way(area.a)[highway];
+make stat name=set(t["name"])-&gt;.all;
+nwr(area.a)["addr:street"];
+for (t["addr:street"])
+{
+  if (!lrs_in(_.val, all.u(t["name"])))
+  {
+    make stat value=_.val,
+        nodes=count(nodes),ways=count(ways),rels=count(relations);
+    out;
+  }
+}
+</pre>
+
+<p>This uses the new feature <em>lrs_in</em> in line 8.
+The <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#List_Represented_Set_Theoretic_Operators">lrs_in</a> evaluator checks
+whether its first argument is contained in the list constituted by the second argument.
+We supply that list of interesting values
+by compiling the list of all street names in Grenoble in line 4.
+Thus, the condition in line 8 gets true exactly
+if the particular value of <em>addr:street</em> is not found in the list of street names.</p>
+
+<p>A lot of the entries point to wrongly filled <em>addr:street</em> tags.
+Can we show the affected objects to fix them later on? <a href="https://overpass-turbo.eu/s/zgf">Yes</a>:</p>
+
+<pre>
+area[name="Grenoble"]-&gt;.a;
+way(area.a)[highway];
+make stat name=set(t["name"])-&gt;.all;
+nwr(area.a)["addr:street"];
+for (t["addr:street"])
+{
+  if (!lrs_in(_.val, all.u(t["name"])))
+  {
+    out center;
+  }
+}
+</pre>
+
+<p>In line 9 we simply output the group of this loop with <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Print_.28out.29">out center</a>.
+This needs OSM or JSON format, hence we need to omit the declarator line to choose CSV as output format.</p>
+
+<h2 id="keys">Grouping by key</h2>
+
+<p>Did you ever want to have your own custom <em>Taginfo</em>?
+<a href="https://taginfo.openstreetmap.org/">Taginfo</a> is a service that show you which tags are used how often and, roughly, where.
+Because it precomputes the data, it is the preferred tool for global statistics.
+However, sometimes you would like to get Taginfo-like statistics just for your city.
+Or a bounding box of your choice.
+Or a bunch of objects of your choice.
+This is what we want to build in this section.</p>
+
+<p>The most important tool for this is that you can group by keys.
+We <a href="https://overpass-turbo.eu/s/zgg">make a statistic</a> like before,
+this time about which key is used how often:</p>
+
+<pre>
+[out:csv(nodes,ways,rels,key)];
+area[name="Grenoble"]-&gt;.a;
+nwr(area.a);
+for (keys())
+{
+  make stat key=_.val,
+      nodes=count(nodes),ways=count(ways),rels=count(relations);
+  out;
+}
+</pre>
+
+<p>Syntactically, this is quite similar to grouping by an arbitrary criterion as done before:
+The relevant evaluator is <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#All_Keys_Evaluator">keys</a> in line 4.
+Opposed to other evaluators, it is not expected that the loop sets are pairwise disjoint:
+If an object has multiple tags then it will appear in every loop that belongs to one of its tags.</p>
+
+<p>As an exercise, the <a href="https://overpass-turbo.eu/s/zgh">same query</a> with a named variable <em>i</em> for the loop set.
+We ultimately want to get a handle on each value of each tag,
+and we need to nest loops for that purpose:</p>
+
+<pre>
+[out:csv(nodes,ways,rels,key)];
+area[name="Grenoble"]-&gt;.a;
+nwr(area.a);
+for-&gt;.i(keys())
+{
+  make stat key=i.val,
+      nodes=i.count(nodes),ways=i.count(ways),
+      rels=i.count(relations);
+  out;
+}
+</pre>
+
+<p>Note that the named variable <em>i</em> appears in quite a lot of places:</p>
+<ul>
+<li>in the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_for">for</a> loop</li>
+<li>to refer to the value of this loop, <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Set_Key-Value_Evaluator">i.val</a></li>
+<li>in the statistical evaluator <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Statistical_Count">count</a> to ensure that we count the right set</li>
+</ul>
+
+<p>A <a href="https://overpass-turbo.eu/s/zgi">first attempt</a> to nest loops:</p>
+
+<pre>
+[out:csv(nodes,ways,rels,key,value)];
+area[name="Grenoble"]-&gt;.a;
+nwr(area.a);
+for-&gt;.i(keys())
+{
+  make stat key=i.val,
+      nodes=i.count(nodes),ways=i.count(ways),
+      rels=i.count(relations);
+  out;
+
+  for.i(t[i.val])
+  {
+    make stat key=i.val,value=_.val,
+        nodes=count(nodes),ways=count(ways),rels=count(relations);
+    out;
+  }
+}
+</pre>
+
+<p>Lines 1 to 8 are the same as before.
+Line 10 is the nested <em>for</em> statement.
+Here, we use <em>i</em> as the input variable.
+In particular, we need in line 10 the expression <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Set_Key-Value_Evaluator">i.val</a>
+to choose the right key to evaulate for tag values.
+Lines 12 to 14 are then again the block to build statistics.
+Please note that we now use again <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Statistical_Count">count</a> without prefix because
+we want to count elements in the default set <em>_</em>.</p>
+
+<p>The approach works from a technical point of view, although the runtime is about one minute.
+The bigger problem is that the list is of little use due to its sheer size.</p>
+
+<p>We can overcome this with an <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_if">if</a> statement at the key level.
+<a href="https://overpass-turbo.eu/s/zgo">This</a> does not split up keys if they appear less than a 100 times:</p>
+
+<pre>
+[out:csv(nodes,ways,rels,key,value)];
+area[name="Grenoble"]-&gt;.a;
+nwr(area.a);
+for-&gt;.i(keys())
+{
+  if (i.count(nodes)+i.count(ways)+i.count(relations) &lt; 100)
+  {
+    make stat key=i.val,
+        nodes=i.count(nodes),ways=i.count(ways),
+        rels=i.count(relations);
+    out;
+  }
+  else
+  {
+    for.i(t[i.val])
+    {
+      make stat key=i.val,value=_.val,
+          nodes=count(nodes),ways=count(ways),rels=count(relations);
+      out;
+    }
+  }
+}
+</pre>
+
+<p>Or we can filter the values to show.
+Given that we have a lot of identifiers around,
+this reduces the number of lines far better than collating keys.
+<a href="https://overpass-turbo.eu/s/zgm">Show only values</a> that appear 100 times or more often:</p>
+
+<pre>
+[out:csv(nodes,ways,rels,key,value,users)];
+area[name="Grenoble"]-&gt;.a;
+nwr(area.a);
+for-&gt;.i(keys())
+{
+  make stat key=i.val,
+      nodes=i.count(nodes),ways=i.count(ways),
+      rels=i.count(relations);
+  out;
+
+  for.i(t[i.val])
+  {
+    if (count(nodes)+count(ways)+count(relations) &gt;= 100)
+    {
+      make stat key=i.val,value=_.val,
+          nodes=count(nodes),ways=count(ways),
+          relations=count(relations);
+      out;
+    }
+  }
+}
+</pre>
+
+<p>Whether a tag is well-accepted
+can be judged by number of different users that have used the tag.
+For the moment being, this means the user that has last touched the object.
+We just <a href="https://overpass-turbo.eu/s/zgp">list them</a> for each tag:</p>
+
+<pre>
+[out:csv(nodes,ways,relations,key,value,users)];
+area[name="Grenoble"]-&gt;.a;
+nwr(area.a);
+for-&gt;.i(keys())
+{
+  for.i(t[i.val])
+  {
+    if (count(nodes)+count(ways)+count(relations) &gt;= 100)
+    {
+      make stat key=i.val,value=_.val,users=set(user()),
+          nodes=count(nodes),ways=count(ways),
+          relations=count(relations);
+      out;
+    }
+  }
+}
+</pre>
+
+<p>The new thing here is the evaluator <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Meta_Data_Operators">user</a> in line 10.
+This evaluator returns for a given object the user name of the user that last touched the object.
+The list is made as usual with the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_and_Set">set</a> aggregator.
+
+<p>A tag that draws attention this way is <em>genus</em>.
+While I have no idea what the purpose of the tag is,
+it has high usage numbers with a short list of users.
+Let us explore what this tag is combined with.
+Remember, this section is all about Taginfo-like statisitcs <a href="https://overpass-turbo.eu/s/zgq">over a custom selection</a>:</p>
+
+<pre>
+[out:csv(nodes,ways,relations,key,value,users)];
+area[name="Grenoble"]-&gt;.a;
+nwr(area.a)[genus];
+for-&gt;.i(keys())
+{
+  make stat key=i.val,users=set(user()),
+      nodes=i.count(nodes),ways=i.count(ways),
+      relations=i.count(relations);
+  out;
+
+  for.i(t[i.val])
+  {
+    make stat key=i.val,value=_.val,users=set(user()),
+        nodes=count(nodes),ways=count(ways),
+        relations=count(relations);
+    out;
+  }
+}
+</pre>
+
+<h2 id="compare">Comparing Diffs</h2>
+
+<p>The standard way to use delta queries so far is
+to have an ordinary query
+and to <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Delta_between_two_dates_.28.22diff.22.29">get the delta</a> between the two results as result.
+Beyond that, people have asked for two different things:</p>
+<ul>
+<li><a href="https://github.com/drolbr/Overpass-API/issues/396">Get</a> only objects that have changed in a specific manner</li>
+<li>Get extra data that depends on the result but should not go through the delta mechanism</li>
+</ul>
+<p>Enhancing the <em>out</em> statement to somehow cover that sounded insane
+- it is more than complex enough already.
+Instead there is a new block statement that can be used as a simple statement as well
+and that satisfies most aspects of these two wishes.</p>
+
+<p>Let us start with an example:
+we want only those objects
+that have <a href="https://overpass-turbo.eu/s/zgt">changed</a> their value of the <em>public_transport</em> tag:</p>
+
+<pre>
+[adiff:"2018-04-01T00:00:00Z","2018-05-01T00:00:00Z"];
+area[name="Grenoble"]-&gt;.a;
+node(area.a)[public_transport];
+compare(delta:t["public_transport"]);
+out meta;
+</pre>
+
+<p>Line 1 is the usual <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Augmented_Delta_between_two_dates_.28.22adiff.22.29">adiff</a> declaration
+to turn on delta mode between the two dates <em>2018-04-01</em> and <em>2018-05-01</em>.
+Lines 2 and 3 constitute the standard query for nodes inside Grenoble.
+Deltas for ways and relations are of course possible as well,
+but relations are horribly slow at the moment.</p>
+
+<p>The long term solution to this is to move to something more helpful than relations.
+There are talks (<a href="https://2018.stateofthemap.org/2018/T107-Modding_the_OSM_Data_Model">Jochen's</a> and <a href="https://2018.stateofthemap.org/2018/W019-Areas__Routing__and_Diffs__Can_we_have_Something_Better_than_Relations_">mine</a>) about that on the upcoming SotM.
+The medium term solution is to refactor the database layout,
+but this is a developer year or more effort
+and will thus happen at earliest within a year.</p>
+
+<p>Line 4 is the new statement, <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_compare">compare</a>.
+It consists in this variant of the keyword <em>compare</em>
+and an evaluator after the keyword <em>delta:</em> in parentheses.
+This means that <em>compare</em> keeps only elements
+that have changed their value of the <em>public_transport</em> tag.</p>
+
+<p>Other evaluators are possible as well.
+This includes all the other properties of the objects or combinations of them.</p>
+
+<p>A particular interesting use case <a href="https://overpass-turbo.eu/s/zgG">is existence</a>.
+We use a constant expression as a quick hack for that purpose:</p>
+
+<pre>
+[adiff:"2018-04-01T00:00:00Z","2018-05-01T00:00:00Z"];
+area[name="Grenoble"]-&gt;.a;
+node(area.a)[public_transport];
+compare(delta:1);
+out meta;
+</pre>
+
+<p>For a nonexisiting object, the expression will always evaluate to the empty string.
+For any existing object, the expression evaluates to <em>1</em>.
+Hence, every object that has been deleted and every object that has been created will appear in the delta.
+This is admittedly a quick hack.
+This is also the rationale for the <em>delta</em> keyword.
+Once I understand what use cases are behind the request for created objects only
+resp. deleted objects only,
+I can implement compelling semantics and make that accessible under a different keyword.
+The problem on the table is what should happen to objects
+that continue to exist but have fallen out of the scope of the query.
+A similar problem applies to created objects.</p>
+
+<p>The other desire is to get extra data along the delta mode.
+As an example we want to list for each changed stop the bus routes that call there.
+This cannot be done within the normal delta mode
+because that would eliminate inevitably unchanged bus routes.
+<em>Compare</em> can <a href="https://overpass-turbo.eu/s/zgH">solve this problem</a> as follows:</p>
+
+<pre>
+[adiff:"2018-04-01T00:00:00Z","2018-05-01T00:00:00Z"];
+area[name="Grenoble"]-&gt;.a;
+node(area.a)[public_transport];
+compare(delta:t["public_transport"])
+{
+  rel(bn)[type=route];
+  out;
+}
+out meta;
+</pre>
+
+<p>The compare statement is followed by a block of statements.
+These statements are executed twice; the total execution order is as follows:</p>
+<ul>
+<li>First pass is the complete outer query for the old timestamp.</li>
+<li>Then the outer query is executed up the <em>compare</em> statement for the new timestamp.</li>
+<li>The delta is computed.</li>
+<li>The block after the <em>compare</em> statement is executed for the old timestamp
+with the old objects of the delta in the default variable.</li>
+<li>The block after the <em>compare</em> statement is executed for the new timestamp
+with the new objects of the delta in the default variable.</li>
+<li>The rest of the outer query for the new timestamp is executed.</li>
+</ul>
+<p>For that reason, it is not possible to transfer any information from inside the block to the outer block.
+You should output it from inside the inner block.</p>
+
+<p>The output from the inner block has a new pair of actions,
+<em>show_initial</em> for the first run and <em>show_final</em> for the second run.
+This avoids confusion with the existing actions, <em>delete</em>, <em>modify</em>, and <em>create</em>.</p>
+
+<p>Of course, you could also <a href="https://overpass-turbo.eu/s/zgI">omit</a> the restriction to changed public transport tags:</p>
+
+<pre>
+[adiff:"2018-04-01T00:00:00Z","2018-05-01T00:00:00Z"];
+area[name="Grenoble"]-&gt;.a;
+node(area.a)[public_transport];
+compare
+{
+  rel(bn);
+  out;
+}
+out meta;
+</pre>
+
+<h2 id="timeline">All versions</h2>
+
+<p>Another desire has been to deliver all version of a given object.
+This is not on the mission statement for Overpass API:
+First, it does not make much sense because the geometry of a way or relation can change
+without a new version.
+Second, Overpass API is designed around time slices and not object's life cycles.
+Nonetheless, I have implemented a pair of functions that <a href="https://overpass-turbo.eu/s/zha">allows</a> at least the baseline functionality:</p>
+
+<pre>
+timeline(way,100);
+for (t["created"])
+{
+  retro (_.val)
+  {
+    way(100);
+    out meta;
+  }
+}
+</pre>
+
+<p>The <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_timeline">timeline</a> statement line 1 creates a bunch of derived objects
+where each object represents a perticular version.
+The loop in line 2 then loops over these objects.
+The <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_retro">retro</a> statement in line 4 then sets the time slice of the request within its block
+to the timestamp the evaluator returns.
+This is one version for each version of the object.</p>
+
+</body>
+</html>

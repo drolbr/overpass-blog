@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Compound Values</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Compound Values</h1>
+
+<p>Published: 2018-06-30</p>
+
+<h3>Table of content</h3>
+
+<a href="#engineering">Promoting the Semicolon?</a><br/>
+<a href="#lrs">Capturing Levels</a><br/>
+<a href="#suffix">Units</a><br/>
+<a href="#meta">Beyond the Geodata</a><br/>
+
+<p>In the <a href="numbers.html#discussion">blog post about numbers</a> the semicolons and units have been an open problem.
+A new set of new features now solves this problem.
+These features are the subject of this blog post.</p>
+
+<p>In particular, values with semicolons deserve a clear framework:
+They are a set of values and they are represented as a list.
+Thus, all the function relating to this start with <em>lrs_</em> for <em>list represented set</em>.
+We have already used that framework to <a href="sliced_time_and_space.html#lrs">speed-up building a list of values</a>.</p>
+
+<figure>
+<img src="lorem_ipsum.jpg" style="width:20em;"/>
+<figcaption>Lorem ipsum</figcaption>
+</figure>
+
+<h2 id="engineering">Promoting the Semicolon?</h2>
+
+<p>Sometimes, there is a need to represent multiple values in OpenStreetMap for one tag.
+An example are levels in multi-story structures.
+While most features reside on a single level,
+there are structures like stairs and elevators;
+their very purpose is to belong to multiple levels.
+Hence, it makes sense that we record for them multiple values for the key <em>level</em>.</p>
+
+<p>The de-facto standard for multiple values is concatenating the values with semicolons into the value field.
+This is a problem for multiple reasons:</p>
+
+<p>On a superficious level, the problem is that the semicolon is a legit character within a value
+and by no means special.
+Thus, a genuinely single value might be treated as two by software that splits by semicolon.
+In addition, values in OpenStreetMap are limited to 255 characters.
+Thus, lists may break suddely if they become longer.</p>
+
+<p>The other way round,
+it could be desireable to convert OSM into other formats where the semicolon has a meaning.
+Think for example of CSV, originally "comma separated values", but often "semicolon separated values".
+While there are <a href="https://www.ietf.org/rfc/rfc4180.txt">escaping rules</a>,
+the semicolon in a tag value without a reminder that this may happen
+can and will bring down simpler tools that evaluate CSV or confuse those that try to be smart.
+This is in particular true if one can have good faith testing data without a semicolon in a value
+and run into semicolons in production like meeting a black swan.</p>
+
+<p>This brings us to the more general problem.
+There are a couple of questions of multi-values that should be answered.
+Every software has to answer this for itself.
+For a software like Overpass API where the intent is to keep semantics backwards-compatible over decades,
+this means to guess what will be the settlement in the community how to answer these design questions.
+But the settlement has not taken place yet
+or there never will be a settlement.</p>
+
+<p>This is not about leadership.
+This is about the tedious work of setting up hypotheses and testing them against the now
+not-so-small body of all exsiting OSM data whether these hypotheses are the best or at least sensible choices.</p>
+
+<p>The first question is whether the order of the values is important or not.
+If I ask for values <em>-2;-1</em> and <em>-1;-2</em> for the <em>level</em> tag
+then I imply the answer was no.
+But if you think of seamarks or waymark trails
+where a colouring like <em>red;white;blue</em> is different from <em>blue;red;white</em>
+then the preference tends to keep up order.</p>
+
+<p>Please note that order-matters is a much more expensive feature than can-be-reordered once lists get longer.
+For a list of ten things, there are already more than 3.6 million possible orders.
+For a list of 15 things, this rises to 1.3 trillion possible orders.
+Or, in other terms:
+For a list of eighty things one needs 10 byte to store which values are present
+but up to 75 bytes to store the order.
+Thus, for longer lists storing the order is the expensive thing.</p>
+
+<p>A couple of related questions exist.
+One is the already mentioned how to recognize genuine semicolons that are not intended as separators.
+Another is one of equality:
+are <em>-1</em> and <em>-1.0</em> equal?
+What about leading or trailing space, whitespace, two semicolons one after another?</p>
+
+<p>I have decided to settle for the following policy
+that I consider the most application-neutral hence most future-safe:
+<em>Values are kept verbatim and semicolons treated in no way special
+unless the user applies a semicolon-breaking function.
+These functions may drop leading and trailing space.
+If a complete list consists of terms that can all be read as numbers
+then they may all be treated as numbers for the sake of sorting and equality.</em>
+Of course, the individual functions have a well-defined behaviour on whitespace and numbers.
+It is just that it may change in a future version if an urgent need for that comes up.</p>
+
+<h2 id="lrs">Capturing Levels</h2>
+
+<p>Let us work with levels in practice.
+We start with a simple example and want to get all elements that are on level 1.
+Being aware of the problem that an element can have multiple levels,
+we <a href="https://overpass-turbo.eu/s/zPo">query</a> for all elements that have <em>1</em> as a subset in its level value:</p>
+
+<pre>
+nwr({{bbox}})[level~"1"];
+out geom;
+</pre>
+
+<p>Different than expected, this query also contains elements with <em>level=10</em> and <em>level=-1</em>.
+A remedy to this is to <a href="https://overpass-turbo.eu/s/zPt">restrict</a> the regular expression to allow only <em>1</em>:</p>
+
+<pre>
+nwr({{bbox}})[level~"^1$|^1;|;1$|;1;"];
+out geom;
+</pre>
+
+<p>This does solve the task,
+but looks horribly awkward.
+To overcome this, there is now the evaluator <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#List_Represented_Set_Theoretic_Operators">lrs_in</a>.
+It <a href="https://overpass-turbo.eu/s/zPx">tests</a> whether its second argument interpreted as semicolon separated list
+contains its first argument as element:</p>
+
+<pre>
+nwr({{bbox}})(if:lrs_in(1,t["level"]));
+out geom;
+</pre>
+
+<p>We filter for all elements from the given bouding box
+for that <em>lrs_in(1,t["level"])</em> returns true.
+The expression <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#List_Represented_Set_Theoretic_Operators">lrs_in(1,...)</a></em> returns true if and only if
+its second argument is a list containing its first argument, <em>1</em>.
+We apply this to <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Tag_Value_and_Generic_Value_Operators">t["level"]</a></em>, the respective value of the tag <em>level</em>.</p>
+
+<p>A more basic question is what values for <em>level</em> exist in a place.
+Technically spoken, we want the union of all lists in the <em>level</em> values.
+The evaulator <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#List_Represented_Set_Theoretic_Operators">lrs_union</a> does this <a href="https://overpass-turbo.eu/s/zQm">in a fancy syntax</a>:</p>
+
+<pre>
+nwr({{bbox}})[level];
+make stat level=lrs_union(set(t["level"]), "");
+out;
+</pre>
+
+<p>The first line collects all elements in the bounding box with a <em>level</em> tag.
+In the second line we build a list.
+The list must be stored somewhere;
+we use here a tag <em>level</em> of a newly derived element <em>stat</em>.
+The statement <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_make">make</a> stat level=...</em> does that for the result of its argument.
+The primary use of <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#List_Represented_Set_Theoretic_Operators">lrs_union</a> is to union its two arguments.
+But because each argument is sorted and reduced to unique values for that purpose,
+making the union with an empty argument turns the other argument into a sorted list of unique values.
+<em>set(...)</em> compiles this list, using semicolons like inside the individual list entries.</p>
+
+<p>Now we <a href="https://overpass-turbo.eu/s/zV3">can select</a> all underground elements:</p>
+
+<pre>
+nwr({{bbox}})(if:lrs_isect("-4;-3;-2;-1",t["level"]));
+out geom;
+</pre>
+
+<p>The evaluator <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#List_Represented_Set_Theoretic_Operators">lrs_isect</a> returns all elements
+that are contained in both arguments interpreted as semicolon separated lists.
+We intersect <em>t["level"]</em> with the fixed list <em>-4;-3;-2;-1</em>.</p>
+
+<h2 id="suffix">Units</h2>
+
+<p>When we are recording legal or factual regulations in OpenStreetMap,
+we may find <a href="https://en.wikipedia.org/wiki/Imperial_units">non-standard units</a>.
+A typical example for this are <a href="https://wiki.openstreetmap.org/wiki/Key:maxspeed">speed limits</a> in <em>mph</em>.</p>
+
+<p>We want to have all values in the same units to do e.g. computations for routing.
+For this purpose we can rewrite the value to <em>km/h</em> on the fly,
+regardless whether we are <a href="https://overpass-turbo.eu/s/zV4">in the UK</a> or <a href="https://overpass-turbo.eu/s/zV5">elsewhere</a>:</p>
+
+<pre>
+[out:csv(::id,maxspeed,highway,name)];
+way({{bbox}})[highway][highway!=footway];
+convert row ::id=id(),highway=t["highway"],name=t["name"],
+    maxspeed=(suffix(t["maxspeed"]) == "mph"
+        ? number(t["maxspeed"]) * 1.609344
+        : number(t["maxspeed"]));
+out;
+</pre>
+
+<p>Line 1 is the declaration to get everything <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#CSV_output_mode">in CSV</a>.
+This makes sense because we want to process the values and not the geometry of the ways.
+We choose as columns the id of the object and the generated <em>maxspeed</em>,
+<em>highway</em>, and <em>name</em> tag values.
+Line 2 is a standard query for all ways within the bounding box with a <em>highway</em> tag
+and where that highway tag is not <em>footway</em> because footways should not have speed limits.</p>
+
+<p>In line 3 the interesting thing is within the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_convert">convert</a> statement:
+We use <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_Ternary_Operator">a ternary expression</a> <em>(Condition ? If-True : If-False )</em>
+to determine the value to set for the <em>maxspeed</em> tag.
+If and only if the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Number_Check.2C_Normalizer_and_Suffix">suffix</a> of the value of the <em>maxspeed</em> tag is <em>mph</em>
+then the expression <em>suffix(t["maxspeed"]) == "mph"</em> is true.
+In that case we multiply the value of <em>maxspeed</em> <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Number_Check.2C_Normalizer_and_Suffix">taken as number</a> with the conversion constant.
+Otherwise we take the <em>maxspeed</em> as a plain number.
+This together ensures that we get a value in <em>km/h</em>
+regardless whether the actual value has been in <em>mph</em> or <em>km/h</em>.</p>
+
+<p>The last step is to do proper error checking.
+This means that <a href="https://overpass-turbo.eu/s/zVb">we funnel an error message</a> to the CSV
+if we meet anything that looks like a unit but is neither the implicit km/h nor <em>mph</em>:</p>
+
+<pre>
+[out:csv(::id,maxspeed,highway,name)];
+way({{bbox}})[maxspeed];
+if (lrs_union(set(suffix(t["maxspeed"])),"mph")=="mph")
+{
+  convert row ::id=id(),highway=t["highway"],name=t["name"],
+      maxspeed=(suffix(t["maxspeed"]) == "mph"
+          ? number(t["maxspeed"]) * 1.609344
+          : number(t["maxspeed"]));
+}
+else
+{
+  make row ::id=1,highway="bad_unit",
+      name=set("{"+suffix(t["maxspeed"])+"}");
+}
+out;
+</pre>
+
+<p>The changed lines are line 3 and line 12.
+Line 3 is a test whether the units are as expected:
+The <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_and_Set">aggregator</a> <em>set(...)</em> on <em>suffix(t["maxspeed"])</em> delivers
+all suffixes in the found ways as semicolon-separated list.
+This set should be the empty set or a set containing only <em>mph</em>.
+The fastest way to check whether something is a subset is currently
+to <em>lrs_union</em> it with the superset and check whether it is equal to the superset afterwards.
+Line 12 produces a single result element
+that has in the fields used by this CSV formatting an error message 
+and by <em>set("{"+suffix(t["maxspeed"])+"}")</em> the list of all values that appear as suffixes.</p>
+
+<p>The example currently returns <em>knots</em> from a waterway in the marina in the bounding box.</p>
+
+<h2 id="meta">Beyond the Geodata</h2>
+
+<p>I you want to check the credibility of the geodata then it can be helpful to look at the metadata.
+In particular, the age of the object and surrounding objects gives a hint
+whether the object still exists on the ground or whether simply no mapping activity may have taken place.</p>
+
+<p>The other data in question is well-known from the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Print_.28out.29">meta output mode</a>.
+In addition, this data can now be accessed via evaulators.
+For example, you could now <a href="https://overpass-turbo.eu/s/zX5">find</a> all data that has been last touched in a specific changeset:</p>
+
+<pre>
+nwr(if:changeset()==58017401)({{bbox}});
+out geom;
+</pre>
+
+<p>Another example is to find objects with a suspiciously high version number.
+Relations always have very high version numbers.
+Thus we <a href="https://overpass-turbo.eu/s/zX6">look</a> at ways here:</p>
+
+<pre>
+[out:csv(ver,count)];
+way({{bbox}});
+for (version())
+{
+  make stat count=count(ways),ver=_.val;
+  out;
+}
+</pre>
+
+<p>Line 1 is the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#CSV_output_mode">CSV declaration</a> with
+columns matching the tags <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_make">generated</a> in line 5 and <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Print_.28out.29">printed</a> in line 6.
+Line 2 is a standard query for all objects <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Bounding_box">in the bounding box</a>.
+Line 3 contains the new evaulator, <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Meta_Data_Evaluators">version()</a></em>.
+It is used by the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_for">for</a> loop to group output by version number.</p>
+
+<p>Now we can <a href="https://overpass-turbo.eu/s/zX7">investigate</a> a reasonable number of objects with the highest version numbers:</p>
+
+<pre>
+way({{bbox}})(if:version()>50);
+out geom;
+</pre>
+
+<p>There are <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Meta_Data_Evaluators">further evaulators</a> for <em>timestamp()</em>, <em>uid()</em>, and <em>user()</em>).
+These should be self-explanatory.</p>
+
+</body>
+</html>

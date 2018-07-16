@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Into a Flat World</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Into a Flat World</h1>
+
+<p>Published: 2018-07-16</p>
+
+<h3>Table of content</h3>
+
+<a href="#temp_ovt">Work In Progress</a><br/>
+<a href="#cluster">Study Tag Distribution</a><br/>
+<a href="#stop_area">Stop Areas</a><br/>
+<a href="#geojson">About GeoJSON</a><br/>
+
+<figure>
+<img src="beeline.png" style="width:20em;"/>
+<figcaption>A straight line bent by Web Mercator</figcaption>
+</figure>
+
+<h2 id="temp_ovt">Work In Progress</h2>
+
+<p>In this concluding blog entry for the Overpass API version 0.7.55,
+the notion of derived geometries are introduced.
+This is the framework for feature requests that require to churn OSM elements:
+For example, simplifying a way is useful,
+but inevitably changes the member list of that way.
+Thus the object you get is quite different from the OSM object you asked for.</p>
+
+<p>There are two substantially different use cases to churn OSM objects:</p>
+
+<p>The first is to get insight where otherwise one gets lost in the sheer number of objects.
+As an example, an analysis of the tag <em>operator</em> on railways in Northrhine-Westphalia
+is developed in section <a href="#cluster">Tag Distribution</a>.</p>
+
+<p>The other, more problematic yet useful use case is to auto-convert OSM data on the fly.
+The above mentioned per-object simplication is such a case.
+There are, always have been, and probably ever will be misguided people
+who try to &quot;improve&quot; the OSM database by doing auto-conversion as edits to the database.
+There are <a href="https://wiki.openstreetmap.org/wiki/What%27s_the_problem_with_mechanical_edits%3F">several problems</a> with mechanical edits.
+For this reason, the design of Overpass API shall do its best to defeat such edits.
+In particular, any such conversion strips the version info
+to prevent you from accidentially uploading churned data.</p>
+
+<p>However, this churn feature has its legit use case
+rather to counter the convenience argument of mechanical edits:
+Why should you alter the OSM database if you could get your processed data
+as convenient as with a source edit by converting it on the fly,
+even without needing a conversion chain?
+Please note that in most practical use cases for performance reasons
+you will be better off doing the conversion yourself.
+But the recommandation to use a script at the target
+has in the past muted not every discussion for a mechanical edit.</p>
+
+<p>From this version on,
+you can as geometry compute and attach a <a href="https://tools.ietf.org/html/rfc7946">GeoJSON geometry</a> to any derived object.
+GeoJSON has its caveats <a href="#geojson">as explained below</a>, but at least it is relatively popular.</p>
+
+<p>However, tyrasd has deemed GeoJSON directly from Overpass API as too complex for the moment being.
+But he has assured that he will revisit that decision if there is demand.
+Therefore, all examples are illustrated on <a href="https://olbricht.nrw/ovt">a temporary instance</a> (<a href="https://github.com/drolbr/osmtogeojson">source code</a>) of Overpass Turbo.
+I will try my best to ask Martin again.
+So, please give affirmative feedback <a href="https://github.com/drolbr/osmtogeojson/issues">to me</a> or <a href="https://github.com/tyrasd/osmtogeojson/issues">Martin</a>
+if you want to get GeoJSON to Overpass Turbo.</p>
+
+<h2 id="cluster">Study Tag Distribution</h2>
+
+<p>We want to get a good understanding how values of a tag are distributed in a small region.
+In particular, we want to check
+whether the operator values of the railway network in the Ruhrgebiet make sense.
+The Ruhrgebiet has a huge connected light rail network operated by half a dozen or so different companies.</p>
+
+<p>A simple check which values exist shows
+that of virtually every company there exist spelling variants or outdated names have survived:
+(Please remeber that you have to copy and paste at the moment to <a href="https://olbricht.nrw/ovt">the temporary instance</a>)</p>
+
+<pre>
+[out:csv(num,length,operator)];
+area[name="Ruhrgebiet"];
+way[railway][operator](area);
+for (t["operator"])
+{
+  make stat operator=_.val,num=count(ways),length=sum(length());
+  out;
+}
+</pre>
+
+<p>Line 1 lets the result <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#CSV_output_mode">become a CSV file</a>.
+Line 2 selects the Ruhrgebiet as area to search in
+and line 3 requests all ways that have both a key <em>railway</em> and a key <em>operator</em> in that area.
+The <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_for">for</a> statement in line 4 lets the subsequent block (lines 5 to 8)
+be executed once for every value that exists for <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Tag_Value_and_Generic_Value_Operators">t["operator"]</a> in the found set.</p>
+
+<p>Line 6 generates <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_make">one aggregating object</a> per loop execution:
+<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Set_Key-Value_Evaluator">_.val</a> is the value of this loop,
+<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Statistical_Count">count(ways)</a> counts the number of ways that are in the set for this loop, and
+<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Sum">sum(...)</a> aggregates per summing up numbers over
+what its argument evaluates to per object:
+here, <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Length">length()</a> returns the length per object in meters.
+These values <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_make">are assigned</a> to the tags <em>operator</em>, <em>num</em>, and <em>length</em>
+as indicated by the syntax.</p>
+
+<p>Line 7 outputs per loop the generated object.
+The set tags from line 6 match for that purpose the tags requested as columns in line 1.</p>
+
+<p>The most straightforward way to check what is going on
+is to return all involved elements:</p>
+
+<pre>
+area[name="Ruhrgebiet"];
+way[railway][operator](area);
+out geom;
+</pre>
+
+<p>Unfortunately, you see a well-filled map,
+but get no clue which of the elements has what value.</p>
+
+<p>The is where the derived geometry can help.
+We can instead get exactly one point per value:
+(Copy &amp; <a href="https://olbricht.nrw/ovt">paste here</a>)</p>
+
+<pre>
+area[name="Ruhrgebiet"];
+way[railway][operator](area);
+for (t["operator"])
+{
+  make stat operator=_.val,num=count(ways),length=sum(length()),
+      ::geom=center(gcat(geom()));
+  out geom;
+}
+</pre>
+
+<p>The changes to the first request are:
+Keep with the default XML mode by omitting the first line.
+And in the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_make">make</a> statement, we assign to a special value for setting geometry, <em>::geom</em>.
+As opposed to the textual value, we need to assign a geometry to this key:
+The evaluator <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Center">center(...)</a> returns the center of the bounding box of whatever geometry it gets.
+We want to get the center of all the geometry of the involved objects combined.
+Thus, we need an aggregator, and <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_of_Geometry">gcat(...)</a> is the aggregator
+that simply piles up all the geometry it gets from the objects it iterates over.
+Finally, <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Geometry">geom()</a> just returns per object its geometry.</p>
+
+<p>This still does not tell us how the values are spatially distributed.
+While we had too much information before, we now have too little.
+Let's try a different thing.</p>
+
+<p>The convex hull of whatever geometry is the polygon
+that just wraps all the objects inside.
+I.e., we get a glimpse about how disperse the objects are:
+(Copy &amp; <a href="https://olbricht.nrw/ovt">paste here</a>)</p>
+
+<pre>
+area[name="Ruhrgebiet"];
+way[railway][operator](area);
+for (t["operator"])
+{
+  make stat operator=_.val,num=count(ways),length=sum(length()),
+      ::geom=hull(gcat(geom()));
+  out geom;
+}
+</pre>
+
+<p>Relative to the previous query, this one has almost no changes.
+We just have exchanged <em>center(...)</em> for <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Hull">hull(...)</a>.
+Like <em>center</em>, the evaluator <em>hull</em> takes a geometry as argument.
+It then returns the convex hull of the given geometry.</p>
+
+<p>The biggest nuisance is
+that the operator representing the German national railway results in a huge polygon
+- use the magnifying glass symbol to see the full polygons.
+In fact it are two because the division responsible for the stations, <em>DB Station&amp;Service AG</em>
+gets in Germany usually one operator value
+and the division for keeping the tracks, <em>DB Netz AG</em>, a different one.</p>
+
+<p>We want to get rid of them.
+The easiest way is to exclude them in the initial request:
+(Copy &amp; <a href="https://olbricht.nrw/ovt">paste here</a>)</p>
+
+<pre>
+area[name="Ruhrgebiet"];
+way[railway][operator][operator!~"^DB"](area);
+for (t["operator"])
+{
+  make stat operator=_.val,num=count(ways),length=sum(length()),
+      ::geom=hull(gcat(geom()));
+  out geom;
+}
+</pre>
+
+<p>We just have added in line 2 a <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Value_matches_regular_expression_.28.7E.2C_.21.7E.29">regular expression</a> criterion
+that <em>operator</em> shall not start with <em>DB</em>.</p>
+
+<p>Finally, we could also get the exact geometry as one object per value.
+It is just of little use at the moment because Overpass Turbo does not support to highlight the full object:</p>
+
+<pre>
+area[name="Ruhrgebiet"];
+way[railway][operator~"^BO",i](area);
+for (t["operator"])
+{
+  make stat operator=_.val,num=count(ways),length=sum(length()),
+      ::geom=trace(gcat(geom()));
+  out geom;
+}
+</pre>
+
+<p>We have exchanged <em>hull(...)</em> for <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Trace">trace(...)</a>.
+The trace of a geomtry is the deduplicated version, i.e., each segment appears at most once.
+Additionally, I have reduced the scope
+from all values for <em>operator</em> not starting with <em>DB</em>
+to only values for <em>operator</em> starting with <em>BO</em> no matter if uppercase or lowercase.
+This is because this final step is about spelling variants of the operator <em>BOGESTRA</em> only.</p>
+
+<p>Of course, the well-known approach of <a href="https://wiki.openstreetmap.org/wiki/Overpass_turbo/MapCSS">MapCSS</a> is still working.
+But you need to list all the values you want to visualize manually.
+Please fill in the missing values from the tabular result of the first query.
+Because it is so tedious I suggest the approaches with auto-generated geometry instead.</p>
+
+<pre>
+area[name="Ruhrgebiet"];
+way[railway][operator~"^BO",i](area);
+out geom;
+{{style:
+way[operator=BOGESTRA] { color: red; }
+way[operator=bogestra] { color: gold; }
+way[operator=Bochum-Gelsenkirchener Straßenbahnen AG] { color: purple; }
+way[operator=] { color: TODO; }
+}}
+</pre>
+
+<p>A future version of OVerpass Turbo is likely able to just apply a different colour to each object.
+That is the point where the evaluator <em>trace</em> because handy.
+But I am sorry, neither me nor somebody else has implemented that so far.</p>
+
+<h2 id="stop_area">Stop Areas</h2>
+
+<p>We can now auto-generate <em>stop areas</em>,
+i.e. draw clusters of public transport objects that have the same name:
+(Copy &amp; <a href="https://olbricht.nrw/ovt">paste here</a>)</p>
+
+<pre>
+area[name="Dortmund"]->.a;
+( node[public_transport](area.a);
+  node[highway=bus_stop](area.a);
+  way[public_transport](area.a);
+  rel[public_transport=platform](area.a); );
+for (t["name"])
+{
+  make stop_area
+      name=_.val,
+      source=set("{"+type()+" "+id()+"}"),
+      ::geom=hull(gcat(geom()));
+  out geom;
+}
+</pre>
+
+<p>Line 1 picks <em>Dortmund</em> as the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_Query_Statement">area of choice</a>.
+We assign the found area to the named set <em>a</em>
+to ensure that we can use in parallel to the default set and thus multiple times.
+Lines 2 to 5 are query statements for various public transport objects,
+all with some tags and all queries restricted to the area stored in set <em>a</em>.
+Line 6 declares the loop to run over groups by the expression <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Tag_Value_and_Generic_Value_Operators">t["name"]</a>.
+In line 8 to 11, one aggregate object per group is defined.
+We aggregate over all object identifiers, pretty printed as <em>"{"+<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Id_and_Type_of_the_Element">type()</a>+" "+<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Id_and_Type_of_the_Element">id()</a>+"}"</em>.
+And we aggreate over the geomtry by chaining <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Geometry">geom()</a>, <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_of_Geometry">gcat(...)</a>, and <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Hull">hull(...)</a>
+as explained in the <a href="#cluster">previous</a> section.</p>
+
+<p>There is one problem left:
+We get one large polygon across the results for the dispersed objects that have no name.
+We fix it with a extra line:
+(Copy &amp; <a href="https://olbricht.nrw/ovt">paste here</a>)</p>
+
+<pre>
+area[name="Dortmund"]->.a;
+( node[public_transport](area.a);
+  node[highway=bus_stop](area.a);
+  way[public_transport](area.a);
+  rel[public_transport=platform](area.a); );
+nwr._(if:is_tag("name"));
+for (t["name"])
+{
+  make stop_area
+      name=_.val,
+      source=set("{"+type()+" "+id()+"}"),
+      ::geom=hull(gcat(geom()));
+  out geom;
+}
+</pre>
+
+<p>In this extra line, line 6, <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_Query_Statement">nwr</a> lets pass all kinds of OSM objects.
+The criterion <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#By_input_set_.28.setname.29">._</a></em> turns the query into an act of filtering the previous result.
+And the criterion <em>(if:...)</em> employs the evaluator <em>is_tag("name")</em>
+to keep exactly those objects that have the <em>name</em> tag set.</p>
+
+<p>You may wonder why we use as type <em>stop_area</em> instead just <em>way</em>.
+I generally do suggest to use types distinct from <em>node</em>, <em>way</em>, and <em>relation</em> for derived objects.
+In addition, it is not yet decided and subsequently not implemented in Overpass Turbo
+to auto-detect for these typ values if the object is in strict OSM format or the format of a derived object.</p>
+
+<h2 id="geojson">About GeoJSON</h2>
+
+<p>I had for a long time deliberately refrained from implementing GeoJSON.
+The reasons are still important problems, thus I will explain them here.
+Nobody shall claim he had not been warned.</p>
+
+<p>In a nutshell, GeoJSON assumes that <a href="https://tools.ietf.org/html/rfc7946#section-3.1.1">the world were flat</a>.</p>
+
+<p>Overpass API assumes that the world is a (regular) sphere.
+The sphere model is for measurements and striahgt lines slightly off reality,
+the flat world model is often even in the wrong order of magnitude.
+We will walk through examples for the problems.</p>
+
+<p>The first problem is
+that lines looking straight are not shortest connections (i.e. not the beeline)
+and that beelines do not look straight.
+Even worse, line segments that intersect in reality may give the impression of not intersecting and vice versa.
+The result is that the convex hulls introduced <a href="#cluster">above</a> need extra interpolation points.
+This can be some, but often are more than one expects.
+To illustrate the problem we build the beeline from Milano in Italy (IATA code <em>BGY</em>) to Tokyo in Japan (IATA code <em>HND</em>):
+(Copy &amp; <a href="https://olbricht.nrw/ovt">paste here</a>)</p>
+
+<pre>
+[out:json];
+( nwr["iata"="HND"];
+  nwr["iata"="BGY"]; );
+make beeline ::geom=hull(gcat(geom()));
+out geom;
+</pre>
+
+<p>In line 1, JSON is chosen as the output format.
+This allows you to inspect the generated GeoJSON if you want to.
+Lines 2 and 3 collect every object tagged as the airport of Tokyo (HND) or Milano (BGY).
+In line 4, a single object with the convex hull of both airports combined is computed.
+In line 5, this object is printed.</p>
+
+<p>The long edges of the polygon are in fact straight (up to rounding error).
+But the distortion of the flat world assumption lets them appear bent.
+In fact, the Overpass Turbo presentation uses a very common flat world model called <a href="https://en.wikipedia.org/wiki/Web_Mercator">Web Mercator</a>
+that makes this problem slightly worse but it at least preserves angles.
+The flat world of GeoJSON does not even have that property.</p>
+
+<p>For the intersection problem:
+The beeline does cross the borders of Latvija,
+but the phony-straight line does not.</p>
+
+<p>The second problem is that the flat world assumption suggests
+both sides of the 180° line of longitude (called <em>antimeridian</em>) were the western resp. eastern end of the world.
+This has a couple of pitfalls, more and less obvious:
+<ul>
+<li>Measurements may get spectacularly wrong. See the subsequent example.</li>
+<li>Again, segments that do intersect may appear to do not and vice versa.</li>
+<li>Areas may get closed on the wrong side, i.e. enclose the wrong part of the world.</li>
+</ul>
+
+<p>We compute the beeline from the airport of Tokyo (HND) to the airport of Los Angeles (LAX):
+(Copy &amp; <a href="https://olbricht.nrw/ovt">paste here</a>)</p>
+
+<pre>
+[out:json];
+( nwr["iata"="HND"];
+  nwr["iata"="LAX"]; );
+make beeline ::geom=hull(gcat(geom()));
+out geom;
+</pre>
+
+<p>The antimeridian problem is the straight line from the eastern boundary to the western boundary.
+That line, of course, is not part of the flight plan but a presentation artifact.
+In fact, the GeoJSON specification <a href="https://tools.ietf.org/html/rfc7946#section-5.2">does make precautions</a> for the antimeridian
+and simply does not talk about line semgents crossing the antimeridian.
+But Leaflet apparently does assume the world ends at -180° longitude and 180° lonigtude.
+And it is likely that other consuming tool get this wonrg as well.</p>
+
+<p>The third problem is that each of the poles is streched to a very long line.
+This is related to the problem that the distances close to the poles are the most distorted distances.
+But again, there are other problems.
+To illustrate this, we sketch the polar region as a polygon:
+(Copy &amp; <a href="https://olbricht.nrw/ovt">paste here</a>)</p>
+
+<pre>
+[out:json];
+make polar ::geom=poly(lstr(
+    pt(66.5,0),
+    pt(66.5,24),
+    pt(66.5,48),
+    pt(66.5,72),
+    pt(66.5,96),
+    pt(66.5,120),
+    pt(66.5,144),
+    pt(66.5,168),
+    pt(66.5,-168),
+    pt(66.5,-144),
+    pt(66.5,-120),
+    pt(66.5,-96),
+    pt(66.5,-72),
+    pt(66.5,-48),
+    pt(66.5,-24)
+    ));
+out geom;
+</pre>
+
+<p>This is an example how to construct a derived geometry by hand:
+We ultimately want a polygon.
+Thus there is <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Polygon_evaluator">poly(...)</a></em> that contains one or more linestring geometries,
+in this case one.
+This <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Linestring_evaluator">lstr(...)</a></em> is made from multiple point geometries,
+all explicitly stated with <em><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Point_evaluator">pt(&lt;Latitude&gt;, &lt;Longitude&gt;)</a></em>.</p>
+
+<p>This should have been a polygon that covers the north pole.
+Instead, it appears to cover only a strech of relatively small north-south-extent.
+It is not clear how you could enforce a polar polygon that in GeoJSON
+without knowing the limitations of the respective consuming software.</p>
+
+<p>Finally, the adding of interpolation points is currently limited to polygons.
+For linestrings, the points are delivered verbatim.
+This may change infuture versions.</p>
+
+<p>The rationale is that these linestring geometries are expected to be almost always OSM way geometries,
+and I deem it more important to verbatimly preserve that geometry than to compensate for consumer deficits.
+That linestrings are kept can been seenby the following example:
+(Copy &amp; <a href="https://olbricht.nrw/ovt">paste here</a>)</p>
+
+<pre>
+[out:json];
+make polar ::geom=lstr(
+    pt(66.5,0),
+    pt(66.5,120),
+    pt(66.5,180),
+    pt(66.5,-180),
+    pt(66.5,-120)
+    );
+out geom;
+</pre>
+
+</body>
+</html>

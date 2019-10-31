@@ -14,7 +14,7 @@ pre { background-color:yellow; padding:0.5em; }
 
 <h1>Some State of the Public Transport</h1>
 
-<p>Published: 2017-04-24</p>
+<p>Published: 2017-04-24, updated 2019-10-31</p>
 
 <h3>Table of content</h3>
 
@@ -174,7 +174,7 @@ foreach.areas-&gt;.a(
   node.pt[bus=no]-&gt;.not_bus;
   node.pt[bus=yes]-&gt;.explicit_bus;
   make count
-    name=a.set(t[name]),
+    name=a.set(t["name"]),
     all=stops.count(nodes),
     orphans=orphans.count(nodes),
     with_name=with_name.count(nodes),

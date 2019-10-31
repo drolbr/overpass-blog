@@ -14,7 +14,7 @@ pre { background-color:yellow; padding:0.5em; }
 
 <h1>Version 0.7.54 Completed</h1>
 
-<p>Published: 2017-04-10</p>
+<p>Published: 2017-04-10, updated 2019-10-31</p>
 
 <h3>Table of content</h3>
 
@@ -205,16 +205,16 @@ it is necessary to amend the station names with the names of the cities they are
 area[name="Verkehrsverbund Rhein-Ruhr"]-&gt;.a;
 (
   ( way(area.a)[public_transport=platform]
-     (if:is_tag(level)&amp;&amp;number(t[level])<=-2);
+     (if:is_tag(level)&amp;&amp;number(t["level"])<=-2);
     way(area.a)[railway=platform]
-     (if:is_tag(level)&amp;&amp;number(t[level])<=-2); );
+     (if:is_tag(level)&amp;&amp;number(t["level"])<=-2); );
   
   rel[type=public_transport](bw);
 
   (  rel(area.a)[public_transport=platform]
-     (if:is_tag(level)&amp;&amp;number(t[level])<=-2);
+     (if:is_tag(level)&amp;&amp;number(t["level"])<=-2);
     rel(area.a)[railway=platform]
-     (if:is_tag(level)&amp;&amp;number(t[level])<=-2); );
+     (if:is_tag(level)&amp;&amp;number(t["level"])<=-2); );
   
   rel[type=public_transport](br);
 );
@@ -223,7 +223,7 @@ foreach(
   &gt; -&gt;.n;
   .n is_in-&gt;.c;
   area.c[admin_level~"^[68]$"]-&gt;.c;
-  make foo Name=set(t[name]),Stadt=c.set(t[name]);
+  make foo Name=set(t["name"]),Stadt=c.set(t["name"]);
   out tags;
 );
 </pre>

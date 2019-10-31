@@ -14,7 +14,7 @@ pre { background-color:yellow; padding:0.5em; }
 
 <h1>Textual Results</h1>
 
-<p>Published: 2017-04-03</p>
+<p>Published: 2017-04-03, updated 2019-10-31</p>
 
 <h3>Table of content</h3>
 
@@ -111,7 +111,7 @@ foreach(
     ways = count(ways),
     relations = count(relations),
     total = count(nodes) + count(ways) + count(relations);
-  (._; .result)-&gt;.result;
+  (._; .result;)-&gt;.result;
 );
 .result out;
 </pre>
@@ -128,12 +128,12 @@ node({{bbox}})[railway=station];
 foreach(
   node(around:100)[highway=elevator]-&gt;.n;
   make count
-    name = set(t[name]),
+    name = set(t["name"]),
     nodes = n.count(nodes),
     ways = n.count(ways),
     relations = n.count(relations),
     total = n.count(nodes) + n.count(ways) + n.count(relations);
-  (._; .result)-&gt;.result;
+  (._; .result;)-&gt;.result;
 );
 .result out;
 </pre>
@@ -150,11 +150,11 @@ node({{bbox}})[railway=station];
 foreach(
   node(around:100)[highway=elevator]-&gt;.n;
   make count
-    name = set(t[name]),
+    name = set(t["name"]),
     num_nodes = n.count(nodes),
     num_ways = n.count(ways),
     num_relations = n.count(relations);
-  (._; .result)-&gt;.result;
+  (._; .result;)-&gt;.result;
 );
 .result out;
 </pre>
@@ -186,7 +186,7 @@ way[highway=elevator];
 foreach(
   node(w)-&gt;.n;
   way._(if:n.count(nodes) &lt; count_members());
-  (._; .result)-&gt;.result;
+  (._; .result;)-&gt;.result;
 );
 .result out geom;
 </pre>
@@ -216,7 +216,7 @@ way[highway=elevator][!building][!area];
 foreach(
   node(w)-&gt;.n;
   way._(if:n.count(nodes) &lt; count_members());
-  (._; .result)-&gt;.result;
+  (._; .result;)-&gt;.result;
 );
 .result out geom;
 </pre>
@@ -230,7 +230,7 @@ way._[!building][!area];
 foreach(
   node(w)-&gt;.n;
   way._(if:n.count(nodes) &lt; count_members());
-  (._; .result)-&gt;.result;
+  (._; .result;)-&gt;.result;
 );
 .result out geom;
 </pre>

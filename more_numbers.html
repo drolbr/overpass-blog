@@ -14,7 +14,7 @@ pre { background-color:yellow; padding:0.5em; }
 
 <h1>More about Numbers</h1>
 
-<p>Published: 2017-03-20</p>
+<p>Published: 2017-03-20, updated 2019-10-31</p>
 
 <h3>Table of content</h3>
 
@@ -46,7 +46,7 @@ In a first step, we can look <a href="https://overpass-turbo.eu/s/nxA">which lev
 ( node({{bbox}})[level];
   way({{bbox}})[level];
   rel({{bbox}})[level]; );
-make levels_here level_list=set("{" + t[level] + "}");
+make levels_here level_list=set("{" + t["level"] + "}");
 out;
 </pre>
 <p>This works similar to <a href="numbers.html#discussion">the power line example</a> for a list of all values.</p>
@@ -86,9 +86,9 @@ In our example: you would like to know everything about the "RER D" part of the 
 I would like to use <a href="https://overpass-turbo.eu/s/nxy">a slightly fancier variant</a> of the last query:</p>
 <pre>
 make level_param val={{value}} -&gt;.param;
-( node({{bbox}})[level](if:t[level]==param.set(t[val]));
-  way({{bbox}})[level](if:t[level]==param.set(t[val]));
-  rel({{bbox}})[level](if:t[level]==param.set(t[val])); );
+( node({{bbox}})[level](if:t["level"]==param.set(t["val"]));
+  way({{bbox}})[level](if:t["level"]==param.set(t["val"]));
+  rel({{bbox}})[level](if:t["level"]==param.set(t["val"])); );
 (._; &gt;;);
 out;
 </pre>
@@ -106,9 +106,9 @@ but reading from the previous result <em>param</em>.</p>
 <p>Now <a href="https://overpass-turbo.eu/s/nxD">you can use a tag value</a> from a previous result as search criteria:</p>
 <pre>
 node({{bbox}})[name="Gare de Lyon RER D"]-&gt;.param;
-( node({{bbox}})[level](if:t[level]==param.set(t[level]));
-  way({{bbox}})[level](if:t[level]==param.set(t[level]));
-  rel({{bbox}})[level](if:t[level]==param.set(t[level])); );
+( node({{bbox}})[level](if:t["level"]==param.set(t["level"]));
+  way({{bbox}})[level](if:t["level"]==param.set(t["level"]));
+  rel({{bbox}})[level](if:t["level"]==param.set(t["level"])); );
 (._; &gt;;);
 out;
 </pre>
@@ -120,9 +120,9 @@ out;
 The oldest one is <em>layer</em>.
 We are curious <a href="https://overpass-turbo.eu/s/nCP">if there are elements where the tags <em>level</em> and <em>layer</em> differ</a>:</p>
 <pre>
-( node({{bbox}})[level][layer](if:t[level]!=t[layer]));
-  way({{bbox}})[level][layer](if:t[level]!=t[layer]);
-  rel({{bbox}})[level][layer](if:t[level]!=t[layer]); );
+( node({{bbox}})[level][layer](if:t["level"]!=t["layer"]));
+  way({{bbox}})[level][layer](if:t["level"]!=t["layer"]);
+  rel({{bbox}})[level][layer](if:t["level"]!=t["layer"]); );
 (._; &gt;;);
 out;
 </pre>
@@ -157,7 +157,7 @@ way({{bbox}})[layer]-&gt;.all;
 foreach.all(
   node(w)-&gt;.children;
   (
-    way.all(around:0)(if:t[layer]==u(t[layer]));
+    way.all(around:0)(if:t["layer"]==u(t["layer"]));
     - way.all(bn.children);
   );
   (._; .result;)-&gt;.result;
@@ -188,8 +188,8 @@ This speeds up the query because we only need to check properties of already kno
 and not collect a potentially large set of candidates from disk.</li>
 <li><a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Relative_to_other_elements_.28around.29">The condition <em>(around:0)</em></a> restricts the result set further to those ways that intersect the loop element.</li>
 <li>The condition <em>[layer]</em> restricts the result to elements that have a layer tag.</li>
-<li>The condition <em>(if:t[layer]==u(t[layer]))</em> further restricts the result to only those elements that have the same layer as the loop element.
-Note the expression <em>u(t[layer])</em>: this is the aggregator <em>u</em> over the content of the standard bucket.
+<li>The condition <em>(if:t["layer"]==u(t["layer"]))</em> further restricts the result to only those elements that have the same layer as the loop element.
+Note the expression <em>u(t["layer"])</em>: this is the aggregator <em>u</em> over the content of the standard bucket.
 The standard bucket contains at this point the loop element.
 Thus we get the <em>layer</em> value of that element.</li>
 </ul>
@@ -201,11 +201,11 @@ we prepend <em>out geom</em> by the name of the bucket to print from, i.e. <em>.
 <p>We can get the whole thing both faster and less packed by <a href="https://overpass-turbo.eu/s/nCT">inspecting layer-by-layer</a>:</p>
 <pre>
 make param val=-2 -&gt;.param;
-way({{bbox}})(if:t[layer]==param.u(t[val]))-&gt;.all;
+way({{bbox}})(if:t["layer"]==param.u(t["val"]))-&gt;.all;
 foreach.all(
   node(w)-&gt;.children;
   (
-    way.all(around:0)(if:t[layer]==param.u(t[val]));
+    way.all(around:0)(if:t["layer"]==param.u(t["val"]));
     - way.all(bn.children);
   );
   (._; .result;)-&gt;.result;

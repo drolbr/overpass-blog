@@ -28,7 +28,7 @@ pre { background-color:yellow; padding:0.5em; }
 I will walk through the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_API_by_Example">examples page</a> for the next weeks.
 I hope that I can bring that page back up-to-date.</p>
 
-<p>The use of bounding boxes are the first thing that is ot of date there.
+<p>The use of bounding boxes is the first thing that is out of date there.
 For that reason, I would like to explain
 which bounding boxes beyond the standard filter exist
 and what they are good for.</p>
@@ -36,12 +36,12 @@ and what they are good for.</p>
 <h2 id="global_bbox">Global Bounding Box</h2>
 
 <p>Have you ever, like me, typed a request like this one?
-Do you see immediate what is the problem here?</p>
+Do you see immediately what the problem here is?</p>
 <pre>
 node[amenity=restaurant];
 out center;
 </pre>
-<p>Five seconds after sending the request I am stunned that I the request is still running.
+<p>Five seconds after sending the request I am stunned that the request is still running.
 Another five seconds later I realize that I have forgotten the bounding box.
 There are some hundred millions of ways with this tag,
 thus neither the query engine nor the display engine can handle that amount of data in a sane way.
@@ -53,8 +53,8 @@ out center;
 
 <p>This is where the Global Bounding Box is helpful:
 The <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Global_bounding_box_.28bbox.29">Global Bounding Box</a> is set once per request.
-It then does automatically apply to every query statement in the request.
-This means that the following two requests do exactly the same:</p>
+It then automatically applies to every query statement in the request.
+This means that the following two requests do exactly the same. This one:</p>
 <pre>
 node[amenity=restaurant]({{bbox}});
 out center;
@@ -69,17 +69,17 @@ out center;
 <p>I, personally, have the global bounding box always in the request
 and drop it only if the request is intended to be global.
 You may ask why the Global Bounding Box is not turned on by default?
-In general, Overpass API cannot know which bounding box you are looking at.
+In general, the Overpass API cannot know which bounding box you are looking at.
 It is a feature of <a href="https://wiki.openstreetmap.org/wiki/Overpass_turbo">Overpass Turbo</a> to show a map in a viewport
 and to replace each occurrence of <em>{{bbox}}</em> by the boundaries of that viewport.
-In particular, the exactly boundaries depend on screen resolution,
+In particular, the exact boundaries depend on screen resolution,
 i.e. the request may have different results on different clients.
-For my computer, the really sent request is</p>
+For my computer, the actual sent request is</p>
 <pre>
 node[amenity=restaurant](40.79456207284583,-73.97092580795288,40.80971663141517,-73.94957542419434);
 out center;
 </pre>
-<p>resp.</p>
+<p>or alternatively</p>
 <pre>
 [bbox:40.79456207284583,-73.97092580795288,40.80971663141517,-73.94957542419434];
 node[amenity=restaurant];
@@ -104,11 +104,11 @@ out center;
 
 <h2 id="lonlat_bbox">The <em>bbox</em> Parameter</h2>
 
-<p>For historical reasons, there is also another mechanism to set once a bounding box everywhere.
-It has been designed to simplify using Overpass API from <a href="">OpenLayers</a>.</p>
+<p>For historical reasons, there is also another mechanism to set an initial bounding box everywhere.
+It has been designed to simplify using the Overpass API from <a href="https://openlayers.org/">OpenLayers</a>.</p>
 
 <p>You can amend a request with <em>bbox=west,south,east,north</em>.
-Overpass API then replaces each occurence of <em>(bbox)</em> within the request with the proper bounding box
+The Overpass API then replaces each occurence of <em>(bbox)</em> within the request with the proper bounding box
 and <em>[bbox]</em> in the beginning with the proper global bounding box.
 This means that e.g. the following two requests are equal:</p>
 <p><strong><a href="https://overpass-api.de/api/interpreter?data=node[amenity=restaurant](40.79456207284583,-73.97092580795288,40.80971663141517,-73.94957542419434);out+center;">https://overpass-api.de/api/interpreter?data=node[amenity=restaurant](40.79456207284583,-73.97092580795288,40.80971663141517,-73.94957542419434);out+center;</a></strong></p>
@@ -118,16 +118,16 @@ This means that e.g. the following two requests are equal:</p>
 <p>Please note that the coordinates in this parameter are swapped.
 This is because OpenLayers violates <a href="https://en.wikipedia.org/wiki/ISO_6709">that latitude comes first</a> as opposed to most other software.
 Because I did neither want to rewrite OpenLayers nor to bother users with that,
-this special syntax allows to use Overpass API with coordinate order swapped.</p>
+this special syntax allows use of the Overpass API with coordinate order swapped.</p>
 
 <h2 id="geom_bbox">Output with Bounding Box</h2>
 
 <p>Have you ever tried to keep track of recent changes in a bounding box?
-It turns out that relations of large extend will often clutter up the results.</p>
+It turns out that relations of large extents will often clutter up the results.</p>
 
 <p>This is why you can add a bounding box to the <em>geom</em> mode of <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Print_.28out.29">the <em>out</em> statement</a>.
 Just change <em>geom</em> to <em>geom({{bbox}})</em>.
-This restricts the add coordinates to the given bounding box.</p>
+This restricts the added coordinates to the given bounding box.</p>
 
 <p>For example, <a href="https://overpass-turbo.eu/s/ooO">the following request</a> loads most data outside of its viewport:</p>
 <pre>
@@ -137,7 +137,7 @@ rel
   ({{bbox}});
 out geom;
 </pre>
-<p>If you <a href="https://overpass-turbo.eu/s/ooN">add the geometry limit</a>
+<p>If you <a href="https://overpass-turbo.eu/s/ooN">add the geometry limits</a>
 then only data needed to visualize the relations in the viewport is loaded:</p>
 <pre>
 rel
@@ -148,12 +148,12 @@ out geom({{bbox}});
 </pre>
 
 <p>In practice, this feature is useful only for relations.
-Nodes are either inside oder outside the bounding box.
+Nodes are either inside or outside the bounding box.
 For ways, you can drop some coordinates.
-But because you will get anyway the other member entries without coordinates
+But because you will, also, get the other member entries without coordinates,
 there is not much data you can avoid.
-Only for relations you can drop the geometry of way members completely outside the bounding box.
-But in tracking changes, anyway only the large scale relations are the problem.</p>
+Only for relations can you drop the geometry of way members completely outside the bounding box.
+But in tracking changes, usually only the large scale relations are the problem.</p>
 
 <p>The global bounding box does not automatically add a limit to the <em>geometry</em> mode.
 By contrast, the <em>bbox</em> parameter would trigger a replacement of <em>(bbox)</em> by the proper bounding box

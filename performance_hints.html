@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Some Performance Hints</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Some Performance Hints</h1>
+
+<p>Published: 2017-05-01</p>
+
+<h3>Table of content</h3>
+
+<h2 id=""></h2>
+
+<p>Of the examples' pages I have checked the section <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_API_by_Example#Geometry_and_Topology">about Understanding Geometry and Topology</a>.</p>
+
+<p>While most of the examples are already perfectly fine,
+I would like to analyse further the first example:</p>
+<pre>
+[bbox:{{bbox}}];
+rel[type=multipolygon];
+foreach -> .a (
+  way(r.a:outer);
+  way._(if:count(ways) > 1);
+  rel.a(bw);
+  out;
+);
+</pre>
+<p>The query works, but it is slow.</p>
+
+<p>First of all, I have been more surprised by the number of results <a href="https://overpass-turbo.eu/s/oLq">in the sample region</a>.
+This is relatively unusual, but of course the query should work everywhere.
+In <a href="https://overpass-turbo.eu/s/oLp">a random different region</a> are only 12 or so results.</p>
+
+<p>To make finding multipolygons in Rome faster,
+I would like to discuss where the runtime is used,
+how you can find out,
+and what you can do to make the query faster.</p>
+
+<p>Because currently the server does not tell you how long a query takes,
+you can check only <a href="https://en.wikipedia.org/wiki/Wall-clock_time">wall-clock time</a>.
+I think I will expose more execution details
+once I have figured out
+how to do so in a brief but meaningful way.
+Second, the wall-clock time is good enough to detect large delays.
+You cannot spot reliably the difference between 2 and 3 seconds runtime.
+But you can discriminate between 2 minutes runtime and 3 minutes runtime.</p>
+
+<p>A good approach is to execute the query step-by-step
+and to observe where it starts to take significant amounts of time.</p>
+
+<p>The first line that is executed is the second line.
+To <a href="https://overpass-turbo.eu/s/oLu">cross-check</a> whether the line does something useful,
+we can add a minimal <em>out</em> statement afterwards.
+Minimal out statements are <em>out ids</em> or <em>out count</em>.
+Both do not need any disk activity and are therefore always very fast.</p>
+<pre>
+[bbox:{{bbox}}];
+rel[type=multipolygon];
+out count;
+</pre>
+
+<p>As the first request is a matter of seconds,
+we can add one further statement.
+Now it is a little bit tricky to identify the next statement.
+I take the <em>foreach</em> statement,
+because the other statements all depend on what the foreach statement delivers as loop element.</p>
+<pre>
+[bbox:{{bbox}}];
+rel[type=multipolygon];
+foreach -> .a (
+);
+</pre>
+<p><a href="https://overpass-turbo.eu/s/oLx">This</a> is still relatively fast.</p>
+
+<p>Now the loop <a href="https://overpass-turbo.eu/s/oLy">can be filled</a>:</p>
+<pre>
+[bbox:{{bbox}}];
+rel[type=multipolygon];
+foreach -> .a (
+  way(r.a:outer);
+);
+</pre>
+
+<p>It is time for a first optimization trial.
+The <em>recurse</em> statement inside the foreach loop does need disk activity.
+There are good chances that the query is faster if we replace multiple executions within the loop
+with a single execution before the loop.
+For this purpose, we store the result in an intermediate set <em>w</em>
+and reuse that set in the foreach loop to avoid the disk activity.</p>
+<pre>
+[bbox:{{bbox}}];
+rel[type=multipolygon];
+way(r:outer)->.w;
+foreach -> .a (
+  way.w(r.a:outer);
+);
+</pre>
+<p><a href="https://overpass-turbo.eu/s/oLA">This</a> turns out to be much slower.
+At the moment, I'm pretty sure that I have hit aan uninteded bug,
+but I have not yet investigated that further.
+The bottomline is that this optimization does not make sense at least in this case.</p>
+
+<p>We back out to the previous step
+and <a href="https://overpass-turbo.eu/s/oLB">add the next line</a> of the original request:</p>
+<pre>
+[bbox:{{bbox}}];
+rel[type=multipolygon];
+foreach -> .a (
+  way(r.a:outer);
+  way._(if:count(ways) > 1);
+);
+</pre>
+<p>The wall-clock time has been 17 seconds in my test run.</p>
+
+<pre>
+[bbox:{{bbox}}];
+rel[type=multipolygon];
+foreach -> .a (
+  way(r.a:outer);
+  way._(if:count(ways) > 1);
+  rel.a(bw);
+);
+</pre>
+<p>The wall-clock time has been about 90 seconds in my test run.</p>
+
+<p>...</p>
+<pre>
+[bbox:{{bbox}}];
+rel[type=multipolygon];
+foreach -> .a (
+  way(r.a:outer);
+  rel.a(if:count(ways) > 1);
+);
+</pre>
+(45 Sek)
+
+<pre>
+[bbox:{{bbox}}];
+rel[type=multipolygon];
+foreach -> .a (
+  way(r.a:outer);
+  way._(if:count(ways) > 1);
+  ( rel.a(bw);
+    .result; )->.result;
+);
+.result out;
+</pre>
+
+</body>
+</html>

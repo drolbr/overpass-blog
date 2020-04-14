@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Version 0.7.54 Completed</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Version 0.7.56 Examples</h1>
+
+<p>Published: 2020-04-14</p>
+
+<h3>Table of content</h3>
+
+<a href="#angle">Measuring Angles</a><br/>
+<a href="#memberpos">Only the First Node of a Way</a><br/>
+<a href="#type_shortcuts">Type Shortcuts</a><br/>
+
+<p>I'm back with providing updates. After more than a year I'm proud to present a new release.
+This release provides some smaller new features.</p>
+
+<p>This is not exactly in line with the strategy of: <em>release early, release often</em>
+The rationale is that all the substantial planned changes will change the underlying database model.
+This ia a lot of work and bandwith load for all people running their our instances.
+Thus I hope I can bundle those changes in one large later version.</p>
+
+<p>A first step are the versions 0.7.56.100x
+(as opposed to the 0.7.56.x line presented here).
+I do not recommend them yet for private installations because there are no clone files for it.
+They feature more flexible block sizes.
+That way they can accomodate the area description for Antartica which had been too large due to a projection artifact.
+At the same time they are faster because on average less data needs to be decompressed per request.
+The code currently runs on the <a href="https://z.overpass-api.de">z.overpass-api.de</a> instance.</p>
+
+<p>Back to this version, there are three new features:
+You can measure and work with the angles of ways now.
+You can recurse on only selected nodes of a way.
+And some extra shortcuts make it easier to get some but not all types of objects.</p>
+
+<h2 id="angle">Measuring Angles</h2>
+
+<p>It is now possible to measure angles in ways.
+In the example we query for all ways that <a href="https://overpass-turbo.eu/s/SGu">have a very acute angle</a>:</p>
+
+<pre>
+way({{bbox}})
+  (if:lrs_in(1,per_vertex(angle() &lt; -170 || angle() &gt; 170)));
+out geom;
+</pre>
+
+<p>Why does this look so involved?
+First of all, we search for all ways in a given bouding box, contained in the Overpass Turbo link.
+The angle related part happens in the filter <em>(if:...)</em>.
+This filter is evaluated once for every object, i.e. for each way here,
+but angles are different per vertex of the way.</p>
+
+<p>For this reason, the angle related condition is stated within <em>per_vertex(...)</em>.
+That evaluator evalutes its expression once for every vertex of the way
+and returns the results as a semicolon separated list.
+For illustrative purposes, <a href="https://overpass-turbo.eu/s/SGw">an example</a> for an (almost) retangular building and for an almost straight street:</p>
+
+<pre>
+way(id:266149365,194926851);
+convert info desc=is_tag("highway")?"highway":"building",
+    angles=per_vertex(angle());
+out geom;
+</pre>
+
+<p>You can see the built list of angles in tag <em>angle</em> of each of the two created objects.
+It is almost zero for all angles for the street,
+and it mixes almost zero with almost 90 degrees for the building.</p>
+
+<p>A remark to values: I decided to use turning angle as the mental point of view.
+I.e. a straight road is understood as having an angle close to zero at the respective vertex,
+a sharply turning road has a higher angle, and a U-turn is having an angle close to 180 degrees.
+Consequently, acute angles in buildings are also close to 180 or -180 degrees respectively.</p>
+
+<p>The approach is <a href="https://overpass-turbo.eu/s/SGx">to simplify these numbers</a> to boolean zero or one already in the expression of <em>per_vertex</em>.
+We put a boolean expression like <em>angle() &lt; -2</em> in the argument of <em>per_vertex</em>
+(refined to catch both negative and positive large angles).
+This way we get zero for almost zero angles and one for all other angles:</p>
+
+<pre>
+way(id:266149365,194926851);
+convert info desc=is_tag("highway")?"highway":"building",
+    angles=per_vertex(angle() &lt; -2 || angle() &gt; 2);
+out geom;
+</pre>
+
+<p>We can now use the <a href="https://dev.overpass-api.de/overpass-doc/en/criteria/lrs.html#single">here documented</a> evaluator <em>lrs_in(1, ...)</em>
+to check for each way whether there is at least one vertex in a way that fulfills the spike condition.
+This way, we keep only those ways that have a very acute angle.</p>
+
+<p>For your convenience, a complete example to <a href="https://overpass-turbo.eu/s/RtB">query for non-rectangular buildings</a>:</p>
+
+<pre>
+way({{bbox}})[building]
+  (if:lrs_in(1,per_vertex(
+     angle() &lt; -92 || (angle() &gt; -88 &amp;&amp; angle() &lt; -2)
+     || (angle() &gt; 2 &amp;&amp; angle() &lt; 88) || angle() &gt; 92)));
+out geom;
+</pre>
+
+<p>In this case, it could be interesting to figure out
+where the non-rectangular vertices are.
+We do this <a href="https://overpass-turbo.eu/s/RtC">for a single way</a>, because where houses are built wall-to-wall,
+it is probable that one looks on the wrong building otherwise:</p>
+
+<pre>
+way(60538085);
+out geom;
+</pre>
+
+<p>Now we select <a href="https://overpass-turbo.eu/s/RtE">all nodes for which</a> the way has a non-rectangular and non-zero angle in that node:</p>
+
+<pre>
+way(60538085);
+node(w)(if:lrs_in(id(),set(per_vertex(
+    (angle()<-92 || (angle() >-88 &amp;&amp; angle() &lt; -2)
+    || (angle() &gt; 2 &amp;&amp; angle() &lt; 88) || angle() &gt; 92)
+    ? ref() : 0))));
+out geom;
+</pre>
+
+<h2 id="memberpos">Only the First Node of a Way</h2>
+
+<p>There are more evaluators that can be applied per vertex of a way:
+With the evalutators for <em>pos</em> and <em>ref</em> of an element,
+one can get out of a recursion only elements on specific positions.
+We can ask for only the first and the last member of the way just mentioned before:</p>
+
+<pre>
+way(60538085);
+node(w)(if:lrs_in(id(),set(
+    per_member(lrs_in(pos(),"1;"+(count_members()-1))?ref():0))));
+out geom;
+</pre>
+
+<p>We use the filter to accept only the ids of those objects
+that are a member of the way on the desired positions.
+They are taken from a list constructed for this purpose with <em>per_member</em>.</p>
+
+<p>Why do we not use <em>per_vertex</em> again?
+The evaluator <em>per_vertex</em> is designed for angles:
+It skips the first position always and the last position for open ways,
+because there is no angle defined there.
+By contrast, <em>per_member</em> is always executed once for every member.</p>
+
+<p>Inside <em>per_member</em>, a list evaulator is used
+to select the pos from the expected positions <em>1</em> or <em>count_members()-1</em>.
+If it matches, then the id is returned,
+and that adds the id to the list of accepted ids.
+Otherwise zero is returned, and this is never a valid id.</p>
+
+<p>For your convenience, there is a shortcut integrated in the recurse filter,
+as shown in <a href="https://overpass-turbo.eu/s/RtF">this example</a>.
+Negative values are counted from the tail of the way,
+i.e. <em>-2</em> is the last but one node of the way:</p>
+
+<pre>
+way(60538085);
+node(w:1,-2);
+out geom;
+</pre>
+
+<p>The shortcut is not available for relations yet,
+because I have not figured out so far a compelling syntax for that.</p>
+
+<h2 id="type_shortcuts">Type Shortcuts</h2>
+
+<p>The introduction of the <em>nwr</em> shortcut has improved the readability of queries.
+Thus the language goes further down that road:
+there are now shortcuts <em>nw</em>, <em>nr</em>, and <em>wr</em> available.
+Please feel free to experiment in examples like <a href="https://overpass-turbo.eu/s/RtG">this</a>:
+Exchange one shortcut for another and watch how the result changes!</p>
+
+<pre>
+nwr({{bbox}})[amenity=place_of_worship];
+out center;
+</pre>
+
+<p>To make the language more consistent,
+the same set of shortcuts <a href="https://overpass-turbo.eu/s/RtH">can be used</a> as argument for the <em>count</em> evaluator:</p>
+
+<pre>
+[out:csv(cnt,amenity)];
+nwr({{bbox}})[amenity];
+for (t["amenity"])
+{
+  make stat cnt=count(nwr),amenity=_.val;
+  out;
+}
+</pre>
+
+</body>
+</html>

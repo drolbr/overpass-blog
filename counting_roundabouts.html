@@ -24,7 +24,7 @@ pre { background-color:yellow; padding:0.5em; }
 <a href="#step5">Step 5 – Implementing a counter</a><br/>
 <a href="#step6">Step 6 – Putting it all together</a><br/>
 
-<p>In France the first <em>modern</em> roundabout (where the priority rule states that entering traffic gives way to vehicles on the ring) was built in Quimper in 1976. Since then the number of roundabouts has grown rapidly all over french cities. How many are there ? Let's try and count them using my favourite OpenStreetMap tool – Overpass queries. The full query is a bit complex and uses many Overpass QL features that have been added in versions 0.7.54 and 0.7.55. Let's build the code together, step by step.</p>
+<p>In France the first <em>modern</em> roundabout (where the priority rule states that entering traffic gives way to vehicles on the ring) was built in Quimper in 1976. Since then the number of roundabouts has grown rapidly all over french cities. How many are there ? Let's try and count them using my favourite OpenStreetMap tool – Overpass queries. The full query is a bit complex and uses several features that have been added in versions 0.7.54 and 0.7.55. Let's build the code together, step by step.</p>
 
 <h2 id="step1">Step 1 – Display all roundabouts</h2>
 
@@ -123,7 +123,7 @@ foreach {
     make roundabout ids = set(id()) -> .roundabout_ids;
     .roundabout_ids out; // debug
     make visited
-      ids = lrs_union(roundabout_ids .set(t['ids']),
+      ids = lrs_union(roundabout_ids.set(t['ids']),
                       visited_ids.set(t['ids']))
       -> .visited_ids;
     // .visited_ids out; // debug
@@ -133,7 +133,7 @@ foreach {
 
 <p>The first make statement is the same as above, we just store the result into a named set for convenience. The second make statement builds up the list of <strong>all</strong> visited ids, by creating the union of the ids making up the "current" roundabout together with the ids visited so far. <strong>lrs_union()</strong> is one of the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#List_Represented_Set_Operators">List Represented Set operators</a>, that manipulate lists of values (ids in our case).</p>
 
-<p>Another LRS operator is used in line 6 : <strong>lrs_in()</strong> checks whether the  first argument (the id of the current way in the foreach loop) is contained in the second argument (the ids of all ways visited so far) – we explain the u() operator in the next section. If that is not the case (<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_if">statement if()</a> with the test negated by the sign '!'), the code that builds up the roundabout is executed. In other words, if we have visited a roundabout we do not build it again.</p>
+<p>Another LRS operator is used in line 6: <strong>lrs_in()</strong> checks whether the  first argument (the id of the current way in the foreach loop) is contained in the second argument (the ids of all ways visited so far) – we explain the u() operator in the next section. If that is not the case (<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_if">statement if()</a> with the test negated by the sign '!'), the code that builds up the roundabout is run. In other words, if we have visited a roundabout we do not build it again.</p>
 
 <p>We're nearly there. Our request produces the list of roundabouts, where each roundabout appears once and only once. We can count them ourselves, we can also let Overpass count them for us...</p>
 
@@ -153,13 +153,13 @@ foreach {
 .count out;
 </pre>
 
-<p>Line 3 creates an object called counter, with an tag called num initialized to 0, and puts that object in a set named count. Overpass handles sets : count is a <em>named set</em> which we know contains a single element. Line 5 makes another object called counter and <em>overwrites</em> that named set with a set containing that new object.</p>
+<p>Line 3 creates an object called counter, with a tag called num initialized to 0, and puts that object in a set named count. Overpass handles sets: count is a <em>named set</em> which we know contains a single element. Line 5 makes another object called counter and <em>overwrites</em> that named set with a set containing that new object.</p>
 
 <p>In order to increment our counter, we need to get its value. We've put it in the tag called num of the (single) object that we stored in the set called count. Because we are handling sets we need to use an aggregate function, even though we know the set contains a single object. We do use the aggregator <strong>u()</strong> which is meant just for that : extract a value from a set containing a single object. We could also use set(), and actually any of the aggregators min(), max() or sum() as we know we retrieve a number.</p>
 
 <p>Thus, the syntax <strong>count.u(t['num'])</strong> means "get the value in the tag called num from the single object in the set called count". We add 1 to that value and store the result in the same tag "num", so that we can increment our counter at the next iteration.</p>
 
-<p>Note that all names are arbitrary : the object counter, its tag num and the set count. Each could be named differently, however the tag and the set must be named identiquely inside and outside the loop.
+<p>Note that all names are arbitrarily: the object counter, its tag num and the set count. Each could be named differently, however the tag and the set must be named identiquely inside and outside the loop.
 We can check our counter works by running <a href="http://overpass-turbo.eu/s/13Q0">the request</a> and comparing the result with the number we obtained in step 1.</p>
 
 <h2 id="step6">Step 6 – Putting it all together</h2>

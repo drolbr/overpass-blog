@@ -14,10 +14,10 @@ pre { background-color:yellow; padding:0.5em; }
 
 <h1>Counting roundabouts</h1>
 
-<p>Published by Antoine Riche from <a href="http://cartocite.fr">Carto’Cité</a> under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC-by-sa 4.0 license</a>: 2021-02-19</p>
+<p>Published by Antoine Riche from <a href="http://cartocite.fr">Carto’Cité</a> under <a href="https://creativecommons.org/licenses/by-sa/4.0/">CC-by-sa 4.0 license</a>: 2021-03-10</p>
 
 <h3>Table of content</h3>
-<a href="#step1">Step 1 – Display all roundabout</a><br/>
+<a href="#step1">Step 1 – Display all roundabouts</a><br/>
 <a href="#step2">Step 2 – A complete roundabout</a><br/>
 <a href="#step3">Step 3 – Identifying roundabouts</a><br/>
 <a href="#step4">Step 4 – Skip out visited ways</a><br/>
@@ -66,9 +66,9 @@ out geom;
 
 <h2 id="step3">Step 3 – Identifying roundabouts</h2>
 
-<p>Let's see how we can combine the two requests seen so far: the code that finds all sections of all roundabouts in Quimper, and the code that finds all sections of a single roundabout.</p>
+<p>Let's see how we can combine the two requests produced so far: the code that finds all sections of all roundabouts in Quimper, and the code that finds all sections of a single roundabout.</p>
 
-<p>In fact we're not interested in the actual ways nor their geometries. What we want to do is to <strong>identify</strong> complete roundabouts so that we can count them. We can do so by returning the list of OSM ids that define each roundabout. We use the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_make">make statement</a> together with the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_and_Set">set() aggregator</a>:</p>
+<p>In fact we're not interested in the actual ways nor their geometries. What we want to do is to <strong>identify</strong> complete roundabouts so that we can count them. We can do so by returning the list of way ids that define each roundabout. We use the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_statement_make">make statement</a> together with the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#Union_and_Set">set() aggregator</a>:</p>
 
 <pre>
 way(id:627424118);
@@ -82,7 +82,7 @@ out;
 
 <p>Line 6 creates an object with the tag "ids" defined as the set of ids of the OSM objects in the result set. Both the object type "roundabout" and the tag "ids" are named arbitrarily.</p>
 
-<p>Before considering all roundabouts in Quimper let's focus on a small area with a mix of split and unsplit roundabouts, and <a href="http://overpass-turbo.eu/s/13PX">combine our two requests into one</a>:</p>
+<p>Before considering all roundabouts in Quimper let's focus on a small area with a mix of split and unsplit roundabouts, and <a href="http://overpass-turbo.eu/s/14RX">combine our two requests into one</a>:</p>
 
 <pre>
 way
@@ -93,7 +93,7 @@ out geom; // Useful for debugging
 foreach {
   complete {
     node(w);
-    way[junction=roundabout](bn);
+    way(bn)[junction=roundabout];
   }
   make roundabout ids = set(id());
   out;
@@ -102,11 +102,11 @@ foreach {
 
 <p>Note there are 2 <em>out</em> statements. Line 5 is here for convenience : this outputs the ways with their geometries so that the result is displayed on the map – feel free to comment it out. Line 12 outputs, for each complete roundabout, the list of way ids that define it. These lists are appended to the result set and can be viewed at the bottom of the Data tab.</p>
 
-<p>Let's have a look : we count 22 "roundabouts" even though the map shows just 5. Looking closely we notice that some roundabouts are identical : they use the same set of ids. Looking more closely it appears that each roundabout is returned as many times as the number of ids it contains. This is no surprise, as the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#For-each_loop_.28foreach.29">foreach loop</a> goes through each way of the set we started from, and builds the complete roundabout for each of them. So a roundabout made of 5 ways is "produced" 5 times by the complete loop.</p>
+<p>Let's have a look : we count 22 "roundabouts" even though the map shows just 5. Looking closely we notice that some roundabouts are identical : they use the same set of ids. Looking more closely it appears that each roundabout is returned as many times as the number of ids it contains. This is no surprise, as the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#For-each_loop_.28foreach.29">foreach loop</a> goes through each way of the set we started from, and builds the complete roundabout for each of them. So a roundabout made of 5 ways is produced 5 times by the complete loop.</p>
 
 <h2 id="step4">Step 4 – Skip out visited ways</h2>
 
-<p>We want to make sure we visit each roundabout once and only once. To do so we build up the list of all ids that have been visited so far during the loop execution, and skip ways that have already been visited to avoid producing the same roundabout twice. <a href="http://overpass-turbo.eu/s/13Ri">The request</a> uses some interesting features.</p>
+<p>We want to make sure we visit each roundabout once and only once. To do so we build up the list of all ids that have been visited so far during the loop execution, and skip ways that have already been visited to avoid producing the same roundabout twice. <a href="http://overpass-turbo.eu/s/14RW">The request</a> uses some interesting features.</p>
 
 <pre>
 way
@@ -118,7 +118,7 @@ foreach {
   {
     complete {
       node(w);
-      way[junction=roundabout](bn);
+      way(bn)[junction=roundabout];
     }
     make roundabout ids = set(id()) -> .roundabout_ids;
     .roundabout_ids out; // debug
@@ -131,9 +131,10 @@ foreach {
 }
 </pre>
 
-<p>The first make statement is the same as above, we just store the result into a named set for convenience. The second make statement builds up the list of <strong>all</strong> visited ids, by creating the union of the ids making up the "current" roundabout together with the ids visited so far. <strong>lrs_union()</strong> is one of the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#List_Represented_Set_Operators">List Represented Set operators</a>, that manipulate lists of values (ids in our case).</p>
+<p>The first make statement is the same as above, we just store the result into a named set for convenience. The second make statement builds up the <strong>list of all visited ids</strong>, by creating the union of the ids making up the current roundabout together with the ids visited so far. <strong>lrs_union()</strong> is one of the <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#List_Represented_Set_Operators">List Represented Set operators</a>, that manipulate lists of values (ids in our case).</p>
 
-<p>Another LRS operator is used in line 6: <strong>lrs_in()</strong> checks whether the  first argument (the id of the current way in the foreach loop) is contained in the second argument (the ids of all ways visited so far) – we explain the u() operator in the next section. If that is not the case (<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_if">statement if()</a> with the test negated by the sign '!'), the code that builds up the roundabout is run. In other words, if we have visited a roundabout we do not build it again.</p>
+<p>Another LRS operator is used in line 6: <strong>lrs_in()</strong> checks whether the  first argument is contained in the second argument (the ids of all ways visited so far). The first argument is the id of the current way, which we retrieve using the u() aggregator. This aggregator is designed for sets containing a single element, here the current element of the foreach loop. 
+If that is not the case (<a href="https://wiki.openstreetmap.org/wiki/Overpass_API/Overpass_QL#The_block_statement_if">statement if()</a> with the test negated by the sign '!'), the code that builds up the roundabout is run. In other words, if we have visited a roundabout we do not build it again.</p>
 
 <p>We're nearly there. Our request produces the list of roundabouts, where each roundabout appears once and only once. We can count them ourselves, we can also let Overpass count them for us...</p>
 
@@ -141,30 +142,26 @@ foreach {
 
 <p>Let's see how we can count things for ourselves. To start with let's get back to our first request and count the number of ways <em>without</em> using the out count statement. We need to loop through the ways, and increment a counter inside that loop. Looping through the result set is easily done using a foreach loop.</p>
 
-<p>Implementing a counter is slightly awkward. To do so we use the <strong>make</strong> statement together with the <strong>union</strong> aggregator:</p>
+<p>Implementing a counter is slightly awkward. To do so we use the <strong>make</strong> and <strong>convert</strong> statements:</p>
 
 <pre>
 area[admin_level=8][name="Quimper"];
 way[highway][junction=roundabout](area);
 make counter num = 0 -> .count;
 foreach {
-  make counter num = count.u(t['num']) + 1 -> .count;
+  .count convert counter num = t['num'] + 1 -> .count;
 }
 .count out;
 </pre>
 
-<p>Line 3 creates an object called counter, with a tag called num initialized to 0, and puts that object in a set named count. Overpass handles sets: count is a <em>named set</em> which we know contains a single element. Line 5 makes another object called counter and <em>overwrites</em> that named set with a set containing that new object.</p>
+<p>Line 3 creates an object called counter, with the tag num initialized to 0, and puts that object in the set named count. Overpass handles sets: count is a <em>named set</em> that we know contains a single element. This enables us to use convert in line 5, to derive a new object (also named counter for the sake of clarity) with the tag num incremented. We then <em>overwrite</em> the named set count with that new object.</p>
 
-<p>In order to increment our counter, we need to get its value. We've put it in the tag called num of the (single) object that we stored in the set called count. Because we are handling sets we need to use an aggregate function, even though we know the set contains a single object. We do use the aggregator <strong>u()</strong> which is meant just for that : extract a value from a set containing a single object. We could also use set(), and actually any of the aggregators min(), max() or sum() as we know we retrieve a number.</p>
-
-<p>Thus, the syntax <strong>count.u(t['num'])</strong> means "get the value in the tag called num from the single object in the set called count". We add 1 to that value and store the result in the same tag "num", so that we can increment our counter at the next iteration.</p>
-
-<p>Note that all names are arbitrarily: the object counter, its tag num and the set count. Each could be named differently, however the tag and the set must be named identiquely inside and outside the loop.
-We can check our counter works by running <a href="http://overpass-turbo.eu/s/13Q0">the request</a> and comparing the result with the number we obtained in step 1.</p>
+<p>Note that all names are arbitrary: the object counter, its tag num and the set count. Each could be named differently, however the tag and the set must be named identiquely inside and outside the loop.
+We can check our counter works by running <a href="http://overpass-turbo.eu/s/14RV">the request</a> and comparing the result with the number we obtained in step 1.</p>
 
 <h2 id="step6">Step 6 – Putting it all together</h2>
 
-<p>We've got all the bricks to implement the request. All we need to do is to inject the counter code in the request we obtained in step 4, and consider the city of Quimper again. Here is our <a href="http://overpass-turbo.eu/s/13Rl">final request</a>:<p>
+<p>We now have all the bits to implement the request. All we need to do is to inject the counter code into the request we obtained in step 4, and consider the city of Quimper again.<p>
 
 <pre>
 area[admin_level=8][name="Quimper"];
@@ -175,20 +172,47 @@ foreach {
   {
     complete {
       node(w);
-      way[junction=roundabout](bn);
+      way(bn)[junction=roundabout];
     }
-    make roundabout ids = set(id());
-    // out; // debug
+    make roundabout ids = set(id()) -> .roundabout_ids;
+    // .roundabout_ids out; // debug
     make visited
-      ids = lrs_union(set(t['ids']), visited_ids.set(t['ids']))
+      ids = lrs_union(roundabout_ids.set(t['ids']), 
+                      visited_ids.set(t['ids']))
       -> .visited_ids;
-    make counter num = count.u(t['num']) + 1 -> .count;
+    .count convert counter num = t['num'] + 1 -> .count;
   }
 }
 .count out;
 </pre>
 
-<p>The only thing to take care of is to increment the counter inside the if block, so that the increment is done once for each roundabout, not for each way. Note we also simplified the code a little bit by dropping the use of a named set for the current roundabout – using a named set is not necessary here.</p>
+<p>The only thing to take care of is to increment the counter inside the if block, so that the increment is done once for each roundabout, not for each way.</p>
+
+<p>This request does the job but is rather slow. The performance glitch comes from the instruction <strong>way(bn)[junction=roundabout]</strong> in the complete loop, which reads data from the disk at each iteration. However we are only interested in the roundabout sections in Quimper, which is precisely what the instruction in line 2 produces. So the trick is to put these ways into a named set, so that they are kept in RAM, then restrict the instruction way(bn) to that set of ways. We no longer need the tag filter so line 9 turns into <strong>way.all(bn)</strong>, and we adjust line 4 to fetch data from the named set. Here is <a href="http://overpass-turbo.eu/s/14RT">our final request</a>:</p>
+
+<pre>
+area[admin_level=8][name="Quimper"];
+way[highway][junction=roundabout](area) -> .all;
+make counter num = 0 -> .count;
+foreach.all {
+  if (! lrs_in(u(id()), visited_ids.set(t['ids'])))
+  {
+    complete {
+      node(w);
+      way.all(bn);
+    }
+    make visited
+      ids = lrs_union(set(id()), visited_ids.set(t['ids']))
+      -> .visited_ids;
+    .count convert counter num = t['num'] + 1 -> .count;
+  }
+}
+.count out;
+</pre>
+
+<p>Note we also simplified the code a little bit by dropping the use of a named set for the current roundabout – using a named set is not necessary here.</p>
+
+<p>A big <em>Thank You</em> to Roland for suggesting this highly valuable optimization, as well as making the counter implementation simpler. Also of course for letting me publish this post on his blog :-)</p>
 
 <p><strong>Exercise for the reader</strong>: modify the request to count the number of roundabouts made of a single way and those made of multiple ways – preferably in a single request !</p>
 

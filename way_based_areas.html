@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Closed Ways Become Areas</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Closed Ways Become Areas</h1>
+
+<p>Published: 2021-10-22</p>
+
+<h3>Table of content</h3>
+
+<a href="#background">Closed Ways</a><br/>
+<a href="#is_in">Areas around Coordinates</a><br/>
+<a href="#covers">Objects in Areas</a><br/>
+<a href="#relations">About Relations</a><br/>
+
+<p>The Overpass API now treats closed ways not only as ways but also as areas.</p>
+
+<h2 id="background">Closed Ways</h2>
+
+<p>The Overpass API offered areas as a derived datatype only,
+i.e. it computes once a day or so from the eligible ways and relations their own area data.
+There is a ruleset for eligibility.
+One problem that this process results in is that
+some closed ways are not available for area operations.
+For example, you cannot find a building that a coordinate is in,
+because buildings in general are not converted to areas.</p>
+
+<p>The near future brings a second source of trouble:
+There will be collisions between the potential ids of way based areas and relation based areas.
+That means that it may happen that an area cannot be computed
+because its id is already occupied by another derived area.</p>
+
+<p>More in general:
+areas interact properly with far fewer statements than nodes, ways, and relations.
+That special rules are somewhat annoying.
+Finally, the way based areas occupy precious disk space on the servers.</p>
+
+<p>For that reason, the software has been enhanced to treat closed ways as areas as well.
+This means that for this type of areas the Overpass API can offer the full set of operations.
+It also allows to remove the way based derived areas immediately from the database.</p>
+
+<h2 id="is_in">Areas around Coordinates</h2>
+
+<p>The statement <em>is_in</em> returned only the derived areas,
+but now it also returns closed ways.
+The filter <em>(pivot)</em> looked only at derived areas to return their original objects,
+but now it also relays closed ways from input to output.</p>
+
+<p>Thus, <a href="https://overpass-turbo.eu/s/1cfZ">this preferred sequence of statements</a> works in all versions:</p>
+
+<pre>
+is_in(51.478,-0.001);
+wr(pivot);
+out geom;
+</pre>
+
+<p>In the old semantics, the <em>is_in</em> statement found the derived areas,
+and the <em>(pivot)</em> filter then looked up the generating ways and relations.
+In the new semantics, the <em>is_in</em> statement finds the derived areas and closed ways,
+and the <em>(pivot)</em> filter then looked up the generating relations and in addition keeps the closed ways.</p>
+
+<p>As a result, the existing areas continue to be found.
+In addition, closed ways that were not covered by a rule are now also found.
+Good examples for this are buildings, playgrounds, and landuse polygons.</p>
+
+<p>There might be some corner cases where a closed way shall not be found as an area.
+Mappers are instructed to set a tag <em>area=no</em> on such an object,
+and the <a href="https://overpass-turbo.eu/s/1cg0">following query</a> would exclude such closed ways:</p>
+
+<pre>
+is_in(51.476,0.0459);
+area._[area!=no];
+out geom;
+</pre>
+
+<p>Please remove the <em>[area!=no]</em> part to see the difference!</p>
+
+<p>While I do not recommend the following sequence of statements,
+it continues to work:</p>
+
+<pre>
+is_in(51.476,0.0459);
+out tags;
+</pre>
+
+<p>Please note that <em>out geom</em> in place of <em>out tags</em> never worked
+because the areas have no geometry associated to them.
+While <em>out geom</em> now works for the found ways, it still does not work for areas derived from relations.
+Nonetheless, the statement <em>out tags</em> does deliver the tags of the covering areas.
+It used to display tags from derived areas and now does so from both closed ways and derived areas.</p>
+
+<p>The following sequence of statements is anyway discouraged
+and changes its behaviour:</p>
+
+<pre>
+is_in(51.476,0.0459);
+out ids;
+</pre>
+
+<p>As a side effect of the semantics change,
+the internal rules for numbering derived areas have changed.</p>
+
+<h2 id="covers">Objects in Areas</h2>
+
+<p>A query statement with type <em>area</em> returned derived areas in the past,
+now it returns in addition also closed ways.
+In line to this,
+the filter <em>(area)</em> evaluated in the past derived areas,
+and now it evaluates in addition also closed ways.
+The statement <em>map_to_area</em> continues to resolve relations to their derived areas,
+but it now lets closed ways pass instead of resolving them to derived areas.</p>
+
+<p>Thus, <a href="https://overpass-turbo.eu/s/1chd">this preferred sequence of statements</a> works in all versions:</p>
+
+<pre>
+area[name="Greenwich Park"];
+nwr(area);
+out center;
+</pre>
+
+<p>In the old semantics, the statement with <em>area</em> datatype had found only derived areas.
+Then the <em>area</em> filter selects the objets based solely on derived areas.
+In the new semantics, the statement with <em>area</em> datatype finds in addition also closed ways.
+Then the <em>area</em> filter selects the objets based on both derived areas and closed ways.
+As before, all objects inside are selected.</p>
+
+<p>The change is that now all closed ways can be relied on,
+not only those matching the area generation rules.</p>
+
+<p>Now <a href="https://overpass-turbo.eu/s/1chf">the following query</a> is possible:</p>
+
+<pre>
+area[name="Greenwich Park"](51.47,-0.01,51.48,0.01);
+nwr(area);
+out center;
+</pre>
+
+<p>However, even in the new version it still only works for closed ways.
+Derived areas are never found by the bounding box filter.
+The <a href="https://overpass-turbo.eu/s/1chg">following alternative</a> should work in both new and old versions instead.
+Opposed to the request before, it applies the bounding box to ways and relations and computes the areas based on that result:</p>
+
+<pre>
+wr[name="Greenwich Park"](51.47,-0.01,51.48,0.01);
+map_to_area;
+nwr(area);
+out center;
+</pre>
+
+<p>The following query is discouraged
+and exhibits in both version different behaviour:</p>
+
+<pre>
+area(24004483968);
+nwr(area);
+out center;
+</pre>
+
+<p>Please do not compute the area ids yourself.
+I do reserve the right to change how the id is computed,
+and exactly for this reason the behaviour now changes:
+While way based areas used to get their id by adding 2.4 billion to the way id,
+the relevant id is now the way id itself.
+Instead of this request, the <a href="https://overpass-turbo.eu/s/1chh">following variation</a> is recommended:</p>
+
+<pre>
+way(4483968);
+map_to_area;
+nwr(area);
+out center;
+</pre>
+
+<p>This works in both versions.
+No id computation on the side of the user required.
+It now works for more ways.</p>
+
+<h2 id="relations">About Relations</h2>
+
+<p>Would it make sense to also process relation based areas solely by their representation as relation?
+Definitely yes.
+Unfortunately, there are many more large scale relations than large scale ways.
+Thus, the algorithms used for closed ways are unlikely to work as well for relations.
+Relations can only be directly treated as areas if their format in the database is changed
+such that it is easier to get the coordintes that they cover.</p>
+
+<p>For this reason, this not not happening now,
+but postponed to a version where the internal database format changes anyway.</p>
+
+</body>
+</html>

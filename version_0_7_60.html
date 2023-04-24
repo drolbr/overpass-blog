@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Version 0.7.60</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Version 0.7.60</h1>
+
+<p>Published: 2023-04-25</p>
+
+<h3>Table of content</h3>
+
+<a href="#news">What is new?</a><br/>
+<a href="#background">Background</a><br/>
+
+<p>Since almost two weeks a new version of the Overpass API is out.
+This version addresses primarly those people that maintain an instance on a magnetic hard disk.
+The version has changed the data format of the backend such that updates run four times faster.</p>
+
+<h2 id="news">What is new?</h2>
+
+<p>For the production servers the daily count of read disk blocks have gone down from 90 to 100 million to 6 to 8 million blocks,
+and the consumed CPU time has gone down from about 6 hours to 45 minutes per day - for the about 1422 minute updates of a day. 
+Over 99% of all minute updates now complete within 7 seconds.
+On the development server (this machine) we still have sometimes a lag,
+although much less than before - the reduction in read blocks also pays out here.
+This is the only public machine under my maintenance that runs on magnetic harddisks.
+So it is not as perfect as expected.</p>
+
+<p>To facilitate the migration to the new database format,
+there is a migration tool from the 0.7.52 to 0.7.59 format to the 0.7.60 format, although no way back.
+From 0.7.60.2 on, this migration assistant is automatically triggered from the <em>apply_osc_to_db.sh</em> and <em>fetch_osc_and_apply.sh</em> scripts.
+The migration runtime is expected to be somewhere between one and four hours.</p>
+
+<p>Behind the scenes, this rewrites the files <em>X_tags_global</em> such that they get sorted in the order
+<em>tag - location bucket - id</em> instead of <em>tag - id</em>.
+So it is no longer necessary to sifer every minute through all the half-a-billion ids of ways with a <em>building=yes</em> tag.
+Instead, only the few blocks of <em>building=yes</em> way ids that are at changed locations need to be updated.
+The same is true of many other frequent tags, but to an order of magnitude less blocks and ids.
+The solution now found is simple, not optimal.
+But going for a perfect solution would have taken effort that is more urgently needed in other parts of the OpenStreetMap universe.</p>
+
+<p>In addition, the <em>changelog</em> files are rewritten, because this is a cheap way to save some space.
+In the end, all the newly created files are moved in place in an atomic way.
+If the migration process is stopped, for whatever reason, ahead of time, just delete all the <em>*next*</em> files and re-run the process.</p>
+
+<h2 id="background">Background</h2>
+
+<p>The background of this development priotization is that there are apparently many people running own instances.
+There are additional installation guides from <a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide">ZeLonewolf</a> and <a href="https://www.openstreetmap.org/user/Kai%20Johnson/diary/401263">Kai Johnson</a>,
+and you absolutely should read them if you plan to set up your own instance.
+I hope I can comment on them in a follow-up post here.</p>
+
+<p>It widened my horizon on what kind of platforms people run instances.</p>
+
+<p>The project had started on Linux and still is primarly run there.
+Historically quite early, already in 2011, I had the opportunity to install the Overpass API on FreeBSD.
+Later in 2013, user Malcom Herring tested on MacOS.
+So I'm proud that the software runs smoothly on three POSIX comliant platforms,
+with the usual trio of <em>configure</em>, <em>make</em>, and <em>make install</em>.</p>
+
+<p>However, it started with questions about a Rasberry Pi to learn that people have much broader ideas where to run the software.
+There is a <a href="https://hardware.openstreetmap.org/servers/gorwen.openstreetmap.org/">distinct instance</a> to power the query feature on the <em>osm.org</em> main site.
+This one runs on magentic hard disks, lags sadly behind with the minute diffs,
+and gaves the reason to seek out for optimization potential.
+There are nowadays also instances set up with Ansible, <a href="https://github.com/drolbr/docker-overpass">within Docker</a>, and in AWS
+in addition to traditional installation scenarios and those mentioned above.</p>
+
+<p>There are more things where multiple people have got stuck,
+so my plans for the near future are to improve more of the now identified handling difficulties:
+making shtudown per SIGTERM possible, offering a single script to start all components,
+and to reduce the amount of data transferred by <em>dlownload_clone</em>
+by computing reconstructible data from the downloaded data intead of downloading the precomputed files.</p>
+
+<p>Of course, there are also some features that deserve to be implemented and other substantial performance improvements,
+so please stay tuned for the next release on hopefully already a couple of months.</p>
+
+</body>
+</html>

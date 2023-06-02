@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<style>
+pre { background-color:yellow; padding:0.5em; }
+</style>
+<title>Version 0.7.60</title>
+</head>
+<body style="font-family:sans-serif; max-width:30em">
+
+<p><a href="../index.html">Overpass API</a> &gt; <a href="index.html">Blog</a> &gt;</p>
+
+<h1>Version 0.7.60</h1>
+
+<p>Published: 2023-06-02</p>
+
+<h3>Table of content</h3>
+
+<a href="#zelonewolf">ZeLonewolf's Guide</a><br/>
+<a href="#kaijohnson">Kai Johnson's Guide</a><br/>
+
+<p>As promised in the <a href="version_0_7_60.html">last blog entry</a>, I would like to comment on the existing
+extra installation instructions written by other people.</p>
+
+<p>These are extremely useful: there are things that I may take as granted that are not true for everyone.
+The more people write about their installation experience, the more starting points of knowledge become available.</p>
+
+<p>For example, I currently have a 3.5 MBit landline here, so downloads of 10 MB to 1 GB are painful, but not impossible.
+Downloading the entire OSM database would be a major undertaking and clearly out of reach.
+Other people I know have landlines of up to 50 MBit,
+but still then downloading the entire OSM database would be insane.</p>
+
+<p>I use <a href="https://en.wikipedia.org/wiki/Bash_(Unix_shell">bash</a>) and <a href="https://en.wikipedia.org/wiki/Ssh-agent">ssh</a> literally during every minute of work,
+and consider icon clicking as unfit for anything beyond trivial tasks.
+There might be people who try to install a software without any console,
+and the <a href="https://github.com/drolbr/docker-overpass">Docker package</a> is my best guess how to help out those people,
+although I neither use nor recommend that approach.</p>
+
+<h2 id="zelonewolf">ZeLonewolf's Guide</h2>
+
+<p>See <a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide">here</a></p>
+
+<p>The guide refers to version 0.7.56, and the current version is 0.7.60 as of now.
+This is not a problem in itself, as you should be able to replace version numbers where they appear.
+To the contrary, some things change with newer versions.
+Being explicitly about versions helps the reader to figure out
+if an unexpected behaviour is due to a change in the software.</p>
+
+<h3>Server Prerequisites</h3>
+
+<p>(<a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide#Server_Prerequisites">reference</a>)</p>
+
+<p>You still can track the main database even if your server needs 65 seconds to apply a minute diff.
+Applying multiple minute diffs at once is much faster than applying the same amount of minute diffs consecutively.
+Thus if your server is too slow, then you will most likely see a behaviour where it stabilizes at some lag.
+That lag might vary over the course of a day because the sizes of the diffs vary considerably.
+So, please wait for 24 hours and go then through the logs to figure out
+whether the server is close enough to real time for your needs.</p>
+
+<p>If the disk is the bottleneck then you might want to try lz4 or gz compression.
+If the CPU is the bottleneck then you might want to try an uncompressed database.
+The public instances have the disk as bottleneck,
+although its total size and the efficient use of the RAM cache rather than I/O speed,
+but computation power also not abundant, thus they run on lz4 which is a middle ground between gz and an uncompressed database.</p>
+
+<p>The given hardware specs are realistic.</p>
+
+<p>Minute diffs got a lot faster with version 0.7.60.
+If your server struggles to keep up with updates then you really shall use at minimum that version.</p>
+
+<h3>Web Server Configuration</h3>
+
+<p>(<a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide#Web_Server_Configuration">reference</a>)</p>
+
+<p>I suggest to use
+<code><br/>
+SetOutputFilter DEFLATE<br/>
+</code>
+in the Apache configuration file if you serve data over a network.
+That configuration directive lets Apache compress all output and thus save half of the bandwidth or more.</p>
+
+<h3>Compile and Install Overpass</h3>
+
+<p>(<a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide#Compile_and_Install_Overpass">reference</a>)</p>
+
+<p>I suggest to use
+<code><br/>
+wget -O TARBALL http://dev.overpass-api.de/releases/osm-3s_latest.tar.gz<br/>
+gunzip &lt;"TARBALL" | tar x<br/>
+DISTDIR=$(gunzip &lt;"TARBALL" | tar t | head -n 1)<br/>
+cd $DISTDIR<br/>
+</code>
+where <code>TARBALL</code> must be replaced by the filename you would like to use locally for the source code bundle.
+For example <code>osm-3s_latest.tar.gz</code>.
+This way you do not need to bother about version numbers.
+The version is then always consistent even after an update.
+Please note that for example <code>$DISTDIR</code> will anyway contain the version number.
+So you still can hold all the versions alongside.</p>
+
+<h3>Download the Planet</h3>
+
+<p>(<a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide#Download_the_Planet">reference</a>)</p>
+
+<p>The clone files are already lz4 compressed nowadays.
+So you do no longer need to convert them if you also want to use lz4.</p>
+
+<h3>Configure Launch Scripts</h3>
+
+<p>(<a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide#Configure_Launch_Scripts">reference</a>)</p>
+
+<p>If you run your own private server then you most likely want to turn off rate limits entirely.
+Use <code>--rate-limit=0</code> on both the OSM base and the area dispatcher.</p>
+
+<p><a href="https://github.com/drolbr/docker-overpass/blob/main/overpass-api-server/run.sh">This file</a> is geared towards a private server and may serve as further inspiration.</p>
+
+<p>The <code>sleep 3</code> might mean that you use disproportionate computation power to keep your areas up to date.
+I rather suggest <code>sleep 3600</code> ore even bigger values.</p>
+
+<p>Since <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/versions">version 0.7.57</a> only relations are subject to the area creation loop,
+making that loop a lot faster.
+Ways are now automatically available as areas without any further processing.
+Processing all relation based areas even from scratch takes only two hours or so,
+hence it is no longer necessary to enlarge the runtime for the area generation script.</p>
+
+<h3>Server Automation</h3>
+
+<p>(<a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide#Server_Automation">reference</a>)</p>
+
+<p>If you do not want to keep minute diff files then you can directly use <code>fetch_osc_and_apply.sh</code>.</p>
+
+<h3>Performance Verification</h3>
+
+<p>(<a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide#Performance_Verification">reference</a>)</p>
+
+<h4>Area Database Initial Load</h4>
+
+<p>Since <a href="https://wiki.openstreetmap.org/wiki/Overpass_API/versions">version 0.7.57</a> this is rather some hours than 2-3 days.</p>
+
+<h3>Firewall Configuration</h3>
+
+<p>(<a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide#Firewall_Configuration">reference</a>)</p>
+
+<p>A simpler way to achieve the same effect is to use the <code>Listen</code> directive in Apache.</p>
+
+<h3>Recovering a Corrupted Database</h3>
+
+<p>(<a href="https://wiki.openstreetmap.org/wiki/User:ZeLonewolf/Overpass_Installation_Guide#Recovering_a_Corrupted_Database">reference</a>)</p>
+
+<p>I strongly advocate for rather updating the database than redownloading it.
+Of course, this only works if the database is still healthy,
+i.e. the dispatcher will start with it
+and queries do not cause error messages that files are missing or indexes are inconsistent.</p>
+
+<p>Catching up a day needs depending on your hardware one to four hours
+and needs to download 100 MB worth of diffs if any.</p>
+
+<p>Downloading the data can easily exceed 24 hours and needs 230 GB to 540 GB of data, depending on the variant.</p>
+
+<h2 id="kaijohnson">Kai Johnson's Guide</h2>
+
+<p>See <a href="https://www.openstreetmap.org/user/Kai%20Johnson/diary/401263">here</a>.</p>
+
+<p>This is an example for an approach that would not spring to my mind,
+because I do not even nearly have the landline bandwidth to download a copy of the global OSM database,
+and on mobile even less.</p>
+
+<p>I'm also a bit reluctant to run old desktop hardware, based on cost of electricity,
+but again this differs wildly between different locations, their source of electricity and its cost.
+Running a desktop workstation 24/7, even if mostly idle but at 200 watts, can take 145 kWh per month,
+being about 40 EUR per month in local prices here.
+EnergyStar 5.0 certified systems will consume at most 400 kWh per year, hence one gets closer to 10 EUR per month.</p>
+
+<h3>Setting up the Software</h3>
+
+<p>(<a href="https://www.openstreetmap.org/user/Kai%20Johnson/diary/401263#setting-up-the-software">reference</a>)</p>
+
+<p>The guide moved to the <a href="https://dev.overpass-api.de/overpass-doc/en/more_info/setup.html">Overpass manual</a>.</p>
+
+<h4>Configure Overpass User &amp; Required Dependencies</h4>
+
+<p>I've never heard of <code>liblzr-dev</code> and this is most likely a typo of <code>liblz4-dev</code>.
+Nonetheless, the point about lz4 is absolutely right.
+I've added the package to the list of packages to install in <a href="https://dev.overpass-api.de/overpass-doc/en/more_info/setup.html">the manual</a>.</p>
+
+<h4>Download the Planet</h4>
+
+<p>I'm sorry if <code>download_clone</code> does not resume downloads.
+I though that it does so.
+It is basically <code>wget</code> under the hood which in principle is able to resume downloads.</p>
+
+<p>If you use your instance locally only then calling <code>osm3s_query</code> might be preferable.
+That poses the same queries but without the overhead necessary to communicate over a network. </p>
+
+<h4>Configure Launch Scripts</h4>
+
+<p>Apparently it is not clear which moving parts exist.</p>
+
+<p>Every database has to solve conflicts between concurrent requests.
+No optimal solution exists, but rather it depends on the expected access patterns.
+One quite simple is that only one process can write, arbitrarily many can read,
+and those that read see over their whole runtime the same state of the database as when they have started.
+This is the one that the Overpass API applies:
+writes are always from the minute diffs of the OpenStreetMap main database.</p>
+
+<p>Another highly desirable property is that the whole setup next to never crashes.
+Thus it makes sense to separate the heavy-lifting high-risk update operation
+and the even more risky reading operation from the resource control.
+Resource control needs little CPU, little I/O, but shall be extremely reliable.</p>
+
+<p>So this is why there is the <code>dispatcher</code> which does the resource control.
+If the <code>dispatcher</code> runs then you can pose requests through <code>cgi-bin/interpreter</code> and <code>bin/osm3s_query</code>.
+The former is restricted to what makes sense from through a web server,
+the latter is more versatile but not safe to be called from the open internet.
+The <code>dispatcher</code> will tell a writing process which blocks it can overwrite and which not,
+because there are still open reading processes that might read that information, even if slightly outdated.</p>
+
+<p>To apply an update from the main database one needs to do two things:</p>
+
+<ul>
+<li>discover and download new diffs from the main server </li>
+<li>apply the diffs to the database such that it shows the newest state afterwards</li>
+</ul>
+
+<p>The first job is done by <code>fetch_osc.sh</code>. The second job is done by <code>apply_osc_to_db.sh</code>.
+The rationale to split that up is that in case of something goes wrong
+then you may want to figure out the root cause.
+Either there is something wrong with the remote diffs and what you see in the diff directory are not proper diffs.
+Or something is wrong with the update process itself amid the diff files being in order.</p>
+
+<p>If you do not plan to make sophisticated disaster investigation
+then the joint script for both, <code>fetch_osc_and_apply.sh</code>, is probably the right choice for you.
+This one deletes diff files immediately after applying it.</p>
+
+<p>Any of the three scripts will search for <code>dispatcher</code> and <code>update_from_dir</code> in the same directory
+where they are situated.
+The working directory from which you start the script shall not matter.
+Unfortunately, I do not know what has gone wrong in this regard in Kai's setting.</p>
+
+<p>Any of the three scripts will only start after the dispatcher.
+No magic delay is necessary.
+If you plan to start all from one script then <code>sleep 1</code> after starting the dispatcher into the background does suffice.
+You can use <code>run.sh</code> from the <a href="https://github.com/drolbr/docker-overpass/blob/main/overpass-api-server/run.sh">Docker container</a> if you want an example for a unified script for everything.</p>
+
+<p>For the shutdown: in case of a proper shutdown no locks remain.
+So if you need to delete files after your shutdown process then there is something broken there.
+I'm aware of quite a number of installations where people struggled to get the shutdown proper,
+hence it must be too complicated today.
+Version 0.7.61 which is planned to be released in June 2023 will just allow to kill the <code>dispatcher</code> process
+and everything shuts down properly afterwards.
+For the classical shutdown please have a look at the <a href="https://github.com/drolbr/docker-overpass/blob/main/overpass-api-server/run.sh">Docker container</a> script file.</p>
+
+<p>The areas come atop of this.
+There is a second writing process <code>osm3s_query --rules</code> that creates the areas from the OSM data
+and subject to the rules supplied to it on the standard input.
+Thus, there is a second <code>dispatcher</code> corresponding to this
+which has as its only job to coordinate rewriting areas and reading areas.
+The second dispatcher is independent of the first dispatcher and the minute updates,
+but must run before the area updates.</p>
+
+<p>To make the use of <code>osm3s_query --rules</code> convenient, there are the scripts <code>rules_loop.sh</code> and <code>rules_loop_delta.sh</code>.
+Running instead <code>osm3s_query --rules</code> via cron is also a viable idea.
+If you choose <code>--progress</code> as a parameter then you get lots of progress information,
+one line every about 15 seconds.
+If you want <code>osm3s_query --rules</code> to be mostly quiet then choose <code>--quiet</code> instead.</p>
+
+<p>As with the shutdown of the main service, you can <a href="https://github.com/drolbr/docker-overpass/blob/main/overpass-api-server/run.sh">look at</a> the <code>run.sh</code> how things traditionally are handled.
+Or use version 0.7.61 or newer where you can just kill the <code>dispatcher</code>.</p>
+
+<p>Please give me feedback whether parts or all of this information are important or non-obvious enough
+to put them in the main installation manual.</p>
+
+<h4>Server Automation</h4>
+
+<p>An uncontrolled shutdown alone should not damage the database.
+Database updates are designed to be atomic:
+there is new data in extra blocks and a secondary set of index files with suffix <code>shadow</code>.
+Then there is a short moment during which these index files are linked in place and the old ones discarded.
+Even if the dispatcher is interrupted during that stage,
+it will detect its state after the next restart and sort out things.
+If you observe things otherwise, please tell me.
+I'm absolutely keen to fix bugs for the database's safety from operational circumstances that are unknown here.</p>
+
+<p>So, if your system crashed:</p>
+
+<ul>
+<li>remove the shared memory <code>osm3s_v$VERSION_osm_base</code> and <code>osm3s_v$VERSION_area</code> if they still exist.
+Under Linux, these are at <code>/dev/shm/</code>.</li>
+<li>remove the sockets <code>osm3s_v$VERSION_osm_base</code> and <code>osm3s_v$VERSION_area</code> from the database directory if they exist.</li>
+<li>then restart the dispatcher or dispatchers</li>
+</ul>
+
+<p>Only if this does not fix things then you might have a database problem.
+After starting the dispatcher you can also re-start the update scripts.</p>
+
+<p>One behaviour that is known dangerous is to run multiple dispatchers concurrently towards the same database.
+This is basically only possible with two different versions because of the presence of lock files.
+Do not do that.
+For that reason, the version marker will be removed in future version from the file name.
+This prevents the concurrent start of multiple dispatchers for the same part of the database.</p>
+
+<h4>Performance Verification</h4>
+
+<p>I suggest to use a call to <code>/api/timestamp</code> as prime criterion.
+If you get a response at all then you know that the dispatcher is up and healthy.
+The content of the response will inform you whether the update mechanism works.</p>
+
+<p>If the output of that API call is suspect then please inspect <code>$DB_DIR/replicate_id</code>.
+This is the id of the last successfully applied diff.
+You can compare it to the entry in <code>state.txt</code> on the <a href="https://planet.openstreetmap.org/replication/minute/state.txt">Planet mirror</a> to see whether it is plausible.
+If you have decided to keep a local copy of the diffs
+then there is also a <code>state.txt</code> in the base directory of the diffs.</p>
+
+<p>You are of course also encouraged to look into the log files that Kai has mentioned.
+It is just the second place where I look because it takes more time to make sense of a log
+then to check a one-line API response or text file respectively. </p>
+
+<p>I do not use Slack so you will not get answers from me there.
+You might want to:</p>
+
+<ul>
+<li>use the <a href="https://listes.openstreetmap.fr/wws/info/overpass">Overpass mailing list</a></li>
+<li>ask on <a href="https://community.osm.org/">community.osm.org</a></li>
+<li>write me an email to <code>first name@last name.nrw</code> (my name is Roland Olbricht)</li>
+</ul>
+
+</body>
+</html>
